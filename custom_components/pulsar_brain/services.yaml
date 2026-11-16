@@ -1,0 +1,30 @@
+ask:
+  name: Текстовый запрос
+  description: Прогнать текст через мозг аддона без колонки и вернуть ответ.
+  fields:
+    text:
+      name: Текст
+      description: Запрос, который обработает аддон.
+      required: true
+      selector:
+        text:
+  response:
+    optional: true
+announce:
+  name: Объявление
+  description: Озвучить текст через assist_satellite Home Assistant.
+  fields:
+    text:
+      name: Текст
+      description: Текст объявления.
+      required: true
+      selector:
+        text:
+    entity_id:
+      name: Колонка
+      description: Сущность assist_satellite; обязательна, если их несколько.
+      required: false
+      selector:
+        entity:
+          filter:
+            domain: assist_satellite

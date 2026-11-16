@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-11-16T12:13:18+0300",
+  "piper": {
+    "voice": "ru_RU-irina-medium",
+    "outputRate": 16000
+  },
+  "fixtures": [
+    {
+      "name": "alisa_vklyuchi_svet",
+      "file": "alisa_vklyuchi_svet.wav",
+      "kind": "speech",
+      "text": "Алиса, включи свет",
+      "scenario": "ws_light_on",
+      "durationSec": 3.24,
+      "sampleRate": 16000,
+      "bytes": 103718,
+      "sha256": "134dcd27dac7987524f8fd3342ac34d05fca2e748c626556026f99a962eeecd0",
+      "reused": false
+    },
+    {
+      "name": "alisa_vklyuchi_svet_i_televizor",
+      "file": "alisa_vklyuchi_svet_i_televizor.wav",
+      "kind": "speech",
+      "text": "Алиса, включи свет и телевизор",
+      "scenario": "ws_light_and_tv",
+      "durationSec": 4.099,
+      "sampleRate": 16000,
+      "bytes": 131210,
+      "sha256": "dc62be8f7d4f1ecc9594cfb4eeff3ab563b2941cc65e28d9dfc17ddc14a58c77",
+      "reused": false
+    },
+    {
+      "name": "alisa_vklyuchi_svet_na_10_minut",
+      "file": "alisa_vklyuchi_svet_na_10_minut.wav",
+      "kind": "speech",
+      "text": "Алиса, включи свет на 10 минут",
+      "scenario": "ws_timer_10min",
+      "durationSec": 4.041,
+      "sampleRate": 16000,
+      "bytes": 129352,
+      "sha256": "b9b49eeec98b895c361db8baa5d17cc95865aacfd3218db2725779475e3a4b40",
+      "reused": false
+    },
+    {
+      "name": "alisa_vyklyuchi_svet_v_22_00",
+      "file": "alisa_vyklyuchi_svet_v_22_00.wav",
+      "kind": "speech",
+      "text": "Алиса, выключи свет в 22 часа",
+      "scenario": "ws_schedule_2200",
+      "durationSec": 4.703,
+      "sampleRate": 16000,
+      "bytes": 150528,
+      "sha256": "279b1738f7a0f54222ebbd134a5412410bf2679d9ac9f8e4ecc87dc5d11093ae",
+      "reused": false
+    },
+    {
+      "name": "alisa_a_teper_vyklyuchi",
+      "file": "alisa_a_teper_vyklyuchi.wav",
+      "kind": "speech",
+      "text": "А теперь выключи",
+      "scenario": "ws_followup",
+      "durationSec": 2.381,
+      "sampleRate": 16000,
+      "bytes": 76226,
+      "sha256": "27478f96fa64b6c4169ccd71da728d045b505e0cee20f627a0f95a7947cc93b4",
+      "reused": false
+    },
+    {
+      "name": "silence_3s",
+      "file": "silence_3s.wav",
+      "kind": "silence",
+      "text": "",
+      "scenario": "ws_no_speech",
+      "durationSec": 3.0,
+      "sampleRate": 16000,
+      "bytes": 96044,
+      "sha256": "d303811b8c84619667cd0501342f84ec6cbe69f7aa3856dcf52fabda374c92b8",
+      "reused": false
+    }
+  ]
+}

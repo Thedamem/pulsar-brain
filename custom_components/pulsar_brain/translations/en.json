@@ -1,0 +1,129 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pulsar Brain: addon",
+        "description": "Address of the pulsar_brain addon and the bridge token from its settings.",
+        "data": {
+          "addon_host": "Addon host",
+          "addon_port": "Addon port",
+          "bridge_token": "Bridge token"
+        }
+      },
+      "device": {
+        "title": "Pulsar Brain: speaker",
+        "description": "Pick a configured ESPHome device or enter its address manually. Available devices: {devices}",
+        "data": {
+          "esphome_entry": "ESPHome device",
+          "device_host": "Speaker host",
+          "device_port": "ESPHome API port",
+          "noise_psk": "Noise PSK",
+          "device_name": "Device name"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to the addon",
+      "invalid_auth": "Invalid bridge token",
+      "unknown": "Unknown error",
+      "manual_host_required": "Enter the speaker host for manual setup",
+      "esphome_entry_missing": "The ESPHome device no longer exists",
+      "invalid_tts_base_url": "Use an http(s) base URL without a path, for example http://homeassistant.local:8123"
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured",
+      "already_configured": "This device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pulsar Brain",
+        "description": "Base URL the speaker uses to download answers, and the master switch.",
+        "data": {
+          "tts_base_url": "TTS base URL (optional)",
+          "enabled": "Bridge enabled"
+        }
+      }
+    },
+    "error": {
+      "invalid_tts_base_url": "Use an http(s) base URL without a path, for example http://homeassistant.local:8123"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connected": {
+        "name": "Connection"
+      }
+    },
+    "sensor": {
+      "last_transcript": {
+        "name": "Last transcript"
+      },
+      "last_response": {
+        "name": "Last response"
+      },
+      "last_provider": {
+        "name": "Current provider"
+      }
+    },
+    "select": {
+      "provider": {
+        "name": "Provider"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Bridge enabled"
+      }
+    },
+    "button": {
+      "restart_bridge": {
+        "name": "Restart bridge"
+      }
+    }
+  },
+  "services": {
+    "ask": {
+      "name": "Text request",
+      "description": "Run text through the addon brain without the speaker and return the answer.",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "Request processed by the addon."
+        }
+      }
+    },
+    "announce": {
+      "name": "Announce",
+      "description": "Play an announcement through a Home Assistant assist_satellite.",
+      "fields": {
+        "text": {
+          "name": "Text",
+          "description": "Announcement text."
+        },
+        "entity_id": {
+          "name": "Speaker",
+          "description": "assist_satellite entity; required when there are several."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "empty_text": {
+      "message": "Text must not be empty"
+    },
+    "no_satellite": {
+      "message": "Home Assistant has no assist_satellite entities"
+    },
+    "multiple_satellites": {
+      "message": "Several assist_satellite entities: specify entity_id"
+    },
+    "invalid_satellite": {
+      "message": "Entity {entity_id} is not an assist_satellite"
+    },
+    "voice_run_active": {
+      "message": "Cannot announce while a voice dialog is active"
+    }
+  }
+}

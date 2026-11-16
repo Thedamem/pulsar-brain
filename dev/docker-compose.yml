@@ -1,0 +1,93 @@
+# Local dev stand for pulsar-brain.
+#
+# Default (no addon build required):  docker compose up -d ha whisper piper
+# Full stack (needs a buildable ../addon): docker compose --profile full up -d
+# Full stack + ESPHome mock satellite:    docker compose --profile full --profile tools up -d
+#
+# Host port 8123 is already taken by a socat forward on the dev machine, so
+# Home Assistant is published on 8124 and the addon talks to it as http://ha:8123
+# inside the compose network. HA Core has no Supervisor here: ingress and
+# supervisor-API paths are not exercised by this stand.
+name: pulsar-dev
+
+services:
+  ha:
+    image: homeassistant/home-assistant:stable
+    ports:
+      - "8124:8123"
+    volumes:
+      - ./ha-config:/config
+    environment:
+      TZ: Europe/Moscow
+    restart: unless-stopped
+
+  whisper:
+    image: rhasspy/wyoming-whisper:latest
+    command: ["--model", "small-int8", "--language", "ru", "--uri", "tcp://0.0.0.0:10300"]
+    ports:
+      - "10300:10300"
+    volumes:
+      - whisper-data:/data
+    environment:
+      TZ: Europe/Moscow
+    restart: unless-stopped
+
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    command: ["--voice", "ru_RU-irina-medium", "--uri", "tcp://0.0.0.0:10200"]
+    ports:
+      - "10200:10200"
+    volumes:
+      - piper-data:/data
+    environment:
+      TZ: Europe/Moscow
+    restart: unless-stopped
+
+  addon:
+    profiles: ["full"]
+    build:
+      context: ../addon
+    ports:
+      - "8097:8097"
+    environment:
+      TZ: Europe/Moscow
+      PULSAR_BRAIN_PORT: "8097"
+      # Inside the compose network HA is reachable by service name.
+      PULSAR_BRAIN_HA_URL: "http://ha:8123"
+      # Written to dev/.env by dev/bootstrap-ha.py (gitignored).
+      PULSAR_BRAIN_HA_TOKEN: "${PULSAR_BRAIN_HA_TOKEN:-}"
+      PULSAR_BRAIN_STT_HOST: "whisper"
+      PULSAR_BRAIN_STT_PORT: "10300"
+      PULSAR_BRAIN_TTS_HOST: "piper"
+      PULSAR_BRAIN_TTS_PORT: "10200"
+      PULSAR_BRAIN_MOCK: "1"
+    volumes:
+      - ./data:/data
+    depends_on:
+      - ha
+      - whisper
+      - piper
+    restart: unless-stopped
+
+  mock-satellite:
+    profiles: ["tools"]
+    build:
+      context: ../tests/mock_satellite
+    ports:
+      # ESPHome native API (plaintext): the Python bridge connects here as if it were the station.
+      - "6053:6053"
+      # HTTP control for starting/stopping a scripted run.
+      - "8099:8099"
+    volumes:
+      - ./data/mock-satellite:/data
+    environment:
+      TZ: Europe/Moscow
+    depends_on:
+      addon:
+        condition: service_started
+        required: false
+    restart: unless-stopped
+
+volumes:
+  whisper-data:
+  piper-data:

@@ -1,0 +1,129 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Pulsar Brain: аддон",
+        "description": "Адрес аддона pulsar_brain и токен моста из его настроек.",
+        "data": {
+          "addon_host": "Хост аддона",
+          "addon_port": "Порт аддона",
+          "bridge_token": "Токен моста"
+        }
+      },
+      "device": {
+        "title": "Pulsar Brain: колонка",
+        "description": "Выберите настроенное устройство ESPHome или введите адрес вручную. Доступные устройства: {devices}",
+        "data": {
+          "esphome_entry": "Устройство ESPHome",
+          "device_host": "Хост колонки",
+          "device_port": "Порт ESPHome API",
+          "noise_psk": "Noise PSK",
+          "device_name": "Имя устройства"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не удалось подключиться к аддону",
+      "invalid_auth": "Неверный токен моста",
+      "unknown": "Неизвестная ошибка",
+      "manual_host_required": "Укажите хост колонки для ручного ввода",
+      "esphome_entry_missing": "Устройство ESPHome больше не существует",
+      "invalid_tts_base_url": "Нужен http(s)-адрес без пути, например http://homeassistant.local:8123"
+    },
+    "abort": {
+      "single_instance_allowed": "Интеграция уже настроена",
+      "already_configured": "Это устройство уже настроено"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pulsar Brain",
+        "description": "Базовый URL, по которому колонка скачает ответ, и главный выключатель моста.",
+        "data": {
+          "tts_base_url": "Базовый URL для TTS (необязательно)",
+          "enabled": "Мост включён"
+        }
+      }
+    },
+    "error": {
+      "invalid_tts_base_url": "Нужен http(s)-адрес без пути, например http://homeassistant.local:8123"
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connected": {
+        "name": "Подключение"
+      }
+    },
+    "sensor": {
+      "last_transcript": {
+        "name": "Последняя фраза"
+      },
+      "last_response": {
+        "name": "Последний ответ"
+      },
+      "last_provider": {
+        "name": "Текущий провайдер"
+      }
+    },
+    "select": {
+      "provider": {
+        "name": "Провайдер"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Мост включён"
+      }
+    },
+    "button": {
+      "restart_bridge": {
+        "name": "Перезапустить мост"
+      }
+    }
+  },
+  "services": {
+    "ask": {
+      "name": "Текстовый запрос",
+      "description": "Прогнать текст через мозг аддона без колонки и вернуть ответ.",
+      "fields": {
+        "text": {
+          "name": "Текст",
+          "description": "Запрос, который обработает аддон."
+        }
+      }
+    },
+    "announce": {
+      "name": "Объявление",
+      "description": "Озвучить текст через assist_satellite Home Assistant.",
+      "fields": {
+        "text": {
+          "name": "Текст",
+          "description": "Текст объявления."
+        },
+        "entity_id": {
+          "name": "Колонка",
+          "description": "Сущность assist_satellite; обязательна, если их несколько."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "empty_text": {
+      "message": "Текст не может быть пустым"
+    },
+    "no_satellite": {
+      "message": "В Home Assistant нет сущностей assist_satellite"
+    },
+    "multiple_satellites": {
+      "message": "Несколько assist_satellite: укажите entity_id"
+    },
+    "invalid_satellite": {
+      "message": "Сущность {entity_id} не является assist_satellite"
+    },
+    "voice_run_active": {
+      "message": "Нельзя объявлять во время голосового диалога"
+    }
+  }
+}

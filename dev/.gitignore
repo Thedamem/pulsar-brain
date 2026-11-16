@@ -1,0 +1,5 @@
+# Local dev-stand state and secrets (root .gitignore already covers ha-config/, .venv/).
+ha-token.txt
+state.json
+.env
+data/

@@ -343,3 +343,26 @@ PSK в списке не передаётся. Аддон хранит посл�
 
 DTO — `StationEntryDto`, `StationBindingDto`, `StationsResponse`, `SetStationRequest` в
 `addon/src/shared/protocol.ts`.
+
+### 8.5. Опциональный debug API
+
+Настройки аддона: `access_token` (password, по умолчанию пусто) и `auto_detect` (bool, по
+умолчанию `true`). Порт `8097/tcp` объявлен в `ports` со значением `null` — пользователь включает
+его в настройках сети аддона, когда нужен доступ снаружи ingress.
+
+Авторизация: `Bearer access_token` (он же `PULSAR_BRAIN_UI_TOKEN`) или bridge token; запросы из
+доверенного Supervisor ingress проходят без токена. Если `access_token` не задан, debug-роуты
+отвечают `503 debug_disabled` (кроме ingress).
+
+| Метод | Путь | Назначение |
+|---|---|---|
+| `GET` | `/api/debug/diagnostics` | `DiagnosticsResponse`: версия, uptime, discovery, конфиг STT/TTS, проверки HA/STT/TTS, TCP-пробы, связь с интеграцией, станция |
+| `POST` | `/api/debug/rediscover` | повторно отправить Supervisor discovery, вернуть результат |
+| `POST` | `/api/debug/probe` | `{host,port,timeoutMs?}` → `{ok,latencyMs,error}` (TCP) |
+| `POST` | `/api/debug/autodetect` | проверить настроенные Whisper/Piper, при недоступности найти официальные аддоны и сохранить |
+| `GET` | `/api/debug/ping` | `{ok:true}` без авторизации |
+
+Автоопределение: если `stt.host:port`/`tts.piper.host:port` недоступны по TCP, перебираются
+кандидаты `core-whisper:10300`, `whisper:10300`, `local-whisper:10300`,
+`core-piper:10200`, `piper:10200`, `local-piper:10200`; первый доступный сохраняется в конфиг.
+Discovery объявляется при старте и повторяется каждые 5 минут, пока не подтверждён.

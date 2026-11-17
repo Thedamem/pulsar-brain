@@ -13,6 +13,7 @@ import { SchedulerPage } from "./pages/Scheduler";
 import { StationPage } from "./pages/Station";
 import { HistoryPage } from "./pages/History";
 import { LogsPage } from "./pages/Logs";
+import { DiagnosticsPage } from "./pages/Diagnostics";
 import { TestPage } from "./pages/Test";
 import { SettingsPage } from "./pages/Settings";
 
@@ -27,6 +28,7 @@ const PAGES: Record<SectionId, ComponentType> = {
   station: StationPage,
   history: HistoryPage,
   logs: LogsPage,
+  diagnostics: DiagnosticsPage,
   test: TestPage,
   settings: SettingsPage,
 };

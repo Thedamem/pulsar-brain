@@ -12,8 +12,13 @@
 # root and the app writes config.json, master.key and SQLite files there. A
 # non-root user would need the mount ownership changed outside the image.
 
+# Docker Hub is blocked from some networks (for example, residential ISPs in Russia) while
+# the Supervisor builds this image on the user's device. Pull Node from a public mirror by
+# default; override with --build-arg NODE_IMAGE=node:22-bookworm-slim where Docker Hub works.
+ARG NODE_IMAGE=mirror.gcr.io/library/node:22-bookworm-slim
+
 # ─────────────────────────────────────────────────────────── backend ──
-FROM node:22-bookworm-slim AS backend
+FROM ${NODE_IMAGE} AS backend
 
 WORKDIR /app
 
@@ -25,7 +30,7 @@ COPY src ./src
 RUN npm run build
 
 # ─────────────────────────────────────────────────────────────── web ──
-FROM node:22-bookworm-slim AS web
+FROM ${NODE_IMAGE} AS web
 
 WORKDIR /app
 
@@ -41,7 +46,7 @@ COPY src/shared /src/shared
 RUN npm run build
 
 # ─────────────────────────────────────────────────────────── runtime ──
-FROM node:22-bookworm-slim AS runtime
+FROM ${NODE_IMAGE} AS runtime
 
 LABEL org.opencontainers.image.source="https://github.com/Thedamem/pulsar-brain" \
       org.opencontainers.image.title="Pulsar Brain" \

@@ -142,7 +142,7 @@ HACS и встроенный Marketplace читают репозитории **�
   ```sh
   cd /config
   wget -O /tmp/pulsar_brain.zip \
-    https://github.com/Thedamem/pulsar-brain/releases/download/v0.2.0/pulsar_brain.zip
+    https://github.com/Thedamem/pulsar-brain/releases/download/v0.3.0/pulsar_brain.zip
   unzip -o /tmp/pulsar_brain.zip -d /config
   ha core restart
   ```
@@ -264,7 +264,7 @@ scripts/check-all.sh           # tsc, vitest, сборка SPA, py_compile, pyte
 
 ## Лицензия и статус
 
-- Версия **0.2.0**, gate перед релизом — `scripts/check-all.sh`.
+- Версия **0.3.0**, gate перед релизом — `scripts/check-all.sh`.
 - **Лицензия не выбрана** — файл `LICENSE` пока отсутствует, образ помечен
   `LicenseRef-Proprietary`. Добавление лицензии — отдельное решение maintainer'а.
 - Провайдеры, кроме `mock`, не проверены живыми ключами; это явно отмечено в отчётах и UI.

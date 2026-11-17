@@ -48,17 +48,26 @@ import { createBridgeServer } from "./server/bridge.js";
 import { createStationService } from "./station/service.js";
 import { registerStationApi } from "./station/api.js";
 import { announceAddonDiscovery } from "./supervisor/discovery.js";
+import { autodetectAudioServices } from "./supervisor/probe.js";
+import { registerDebugApi } from "./debug/api.js";
+import type { DiscoverySnapshot } from "./debug/diagnostics.js";
 
 const VERSION: string = packageJson.version;
 const DEFAULT_PORT = 8097;
 
 async function main(): Promise<void> {
-  applyAddonOptions();
+  const addonOptions = applyAddonOptions();
   const logger = createLogger({});
   const log = logger.child("main");
   const startedAt = Date.now();
 
   const configStore = await createConfigStore();
+  if (addonOptions.autoDetect) {
+    const detected = await autodetectAudioServices(configStore, {
+      log: logger.child("autodetect"),
+    });
+    log.info("audio services autodetect", { applied: detected.applied, details: detected.details });
+  }
   const initialConfig = configStore.get();
   log.info("config loaded", {
     dataDir: configStore.dataDir,
@@ -194,20 +203,70 @@ async function main(): Promise<void> {
   };
 
   await scheduler.start();
-  const app = await startHttp(services);
+  const accessToken = addonOptions.accessToken;
+  const app = await startHttp(services, accessToken);
   registerStationApi(app, {
     service: stationService,
     bridgeToken: configStore.bridgeToken(),
-    uiToken: process.env.PULSAR_BRAIN_UI_TOKEN?.trim() ?? "",
+    uiToken: accessToken,
     log: logger.child("station.api"),
   });
+
+  const port = numberFromEnv("PULSAR_BRAIN_PORT", DEFAULT_PORT);
+  const host = process.env.PULSAR_BRAIN_HOST?.trim() || "0.0.0.0";
+  const supervisorToken = (process.env.SUPERVISOR_TOKEN ?? "").trim();
+  let discoverySnapshot: DiscoverySnapshot = {
+    state: supervisorToken.length > 0 ? "pending" : "not_supervisor",
+    at: null,
+    host: null,
+    reason: supervisorToken.length > 0 ? "ещё не отправлено" : "нет SUPERVISOR_TOKEN",
+  };
+
+  const runDiscovery = async (): Promise<{ announced: boolean; reason?: string; host?: string }> => {
+    if (supervisorToken.length === 0) {
+      discoverySnapshot = { state: "not_supervisor", at: Date.now(), host: null, reason: "нет SUPERVISOR_TOKEN" };
+      return { announced: false, reason: "not_supervisor" };
+    }
+    const result = await announceAddonDiscovery({
+      log: logger.child("supervisor"),
+      bridgeToken: configStore.bridgeToken(),
+      version: VERSION,
+      addonPort: port,
+      supervisorToken,
+    });
+    discoverySnapshot = result.announced
+      ? { state: "announced", at: Date.now(), host: result.host, reason: "" }
+      : { state: "failed", at: Date.now(), host: null, reason: result.reason };
+    log.info("supervisor discovery", { ...result });
+    return result;
+  };
+
+  // Debug routes must be registered before the Fastify instance starts listening.
+  registerDebugApi(app, {
+    services,
+    log: logger.child("debug"),
+    accessToken,
+    bridgeToken: configStore.bridgeToken(),
+    addonPort: port,
+    hostname: discoverySnapshot.host,
+    startedAt,
+    discovery: () => discoverySnapshot,
+    rediscover: runDiscovery,
+    autodetect: async () => {
+      const detected = await autodetectAudioServices(configStore, {
+        log: logger.child("autodetect"),
+      });
+      return { applied: detected.applied, details: detected.details };
+    },
+    stationName: () => stationService.bindingName(),
+    integrationLastSeenAt: () => stationService.integrationLastSeenAt(),
+  });
+
   bridge = createBridgeServer(app.server, {
     services,
     bridgeToken: configStore.bridgeToken(),
   });
 
-  const port = numberFromEnv("PULSAR_BRAIN_PORT", DEFAULT_PORT);
-  const host = process.env.PULSAR_BRAIN_HOST?.trim() || "0.0.0.0";
   await app.listen({ port, host });
   log.info("addon started", {
     version: VERSION,
@@ -217,16 +276,14 @@ async function main(): Promise<void> {
     providers: providers.list().map((provider) => provider.id),
   });
 
-  const discovery = await announceAddonDiscovery({
-    log: logger.child("supervisor"),
-    bridgeToken: configStore.bridgeToken(),
-    version: VERSION,
-    addonPort: port,
-    ...(process.env.SUPERVISOR_TOKEN === undefined
-      ? {}
-      : { supervisorToken: process.env.SUPERVISOR_TOKEN }),
-  });
-  log.info("supervisor discovery", { ...discovery });
+  await runDiscovery();
+  const discoveryTimer = setInterval(() => {
+    if (discoverySnapshot.state !== "announced") {
+      void runDiscovery();
+    }
+  }, 5 * 60_000);
+  discoveryTimer.unref();
+  let discoveryTimerRef: ReturnType<typeof setInterval> | null = discoveryTimer;
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
@@ -239,6 +296,10 @@ async function main(): Promise<void> {
       await bridge?.close();
     } catch (err) {
       log.warn("bridge close failed", { error: errorText(err) });
+    }
+    if (discoveryTimerRef !== null) {
+      clearInterval(discoveryTimerRef);
+      discoveryTimerRef = null;
     }
     try {
       await app.close();
@@ -391,11 +452,10 @@ function createAutomationWriter(
   }
 }
 
-async function startHttp(services: AppServices): Promise<FastifyInstance> {
-  const uiToken = process.env.PULSAR_BRAIN_UI_TOKEN?.trim();
+async function startHttp(services: AppServices, uiToken: string): Promise<FastifyInstance> {
   return createHttpServer(
     { services },
-    uiToken === undefined || uiToken.length === 0 ? {} : { uiToken },
+    uiToken.length === 0 ? {} : { uiToken },
   );
 }
 
@@ -467,28 +527,45 @@ async function haHealthCheck(ha: HaClientLike): Promise<ProviderHealth> {
  * Home Assistant writes the addon options to /data/options.json. The only option we expose is
  * log_level; it is translated into the environment variable the logger already understands.
  */
-function applyAddonOptions(): void {
+interface AddonOptions {
+  accessToken: string;
+  autoDetect: boolean;
+}
+
+function applyAddonOptions(): AddonOptions {
   const dataDir = process.env.PULSAR_BRAIN_DATA_DIR?.trim() || "/data";
   let raw: string;
+  const result: AddonOptions = { accessToken: "", autoDetect: true };
   try {
     raw = readFileSync(join(dataDir, "options.json"), "utf8");
   } catch {
-    return;
+    return { ...result, accessToken: process.env.PULSAR_BRAIN_UI_TOKEN?.trim() ?? "" };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return;
+    return { ...result, accessToken: process.env.PULSAR_BRAIN_UI_TOKEN?.trim() ?? "" };
   }
   if (typeof parsed !== "object" || parsed === null) {
-    return;
+    return { ...result, accessToken: process.env.PULSAR_BRAIN_UI_TOKEN?.trim() ?? "" };
   }
-  const level = (parsed as { log_level?: unknown }).log_level;
+  const options = parsed as { log_level?: unknown; access_token?: unknown; auto_detect?: unknown };
   const valid: readonly LogLevel[] = ["trace", "debug", "info", "warn", "error"];
-  if (typeof level === "string" && (valid as readonly string[]).includes(level)) {
-    process.env.PULSAR_BRAIN_LOG_LEVEL = level;
+  if (typeof options.log_level === "string" && (valid as readonly string[]).includes(options.log_level)) {
+    process.env.PULSAR_BRAIN_LOG_LEVEL = options.log_level;
   }
+  if (typeof options.access_token === "string" && options.access_token.trim().length > 0) {
+    result.accessToken = options.access_token.trim();
+    // The UI and the debug API share one bearer token.
+    process.env.PULSAR_BRAIN_UI_TOKEN = result.accessToken;
+  } else if ((process.env.PULSAR_BRAIN_UI_TOKEN ?? "").trim().length > 0) {
+    result.accessToken = (process.env.PULSAR_BRAIN_UI_TOKEN ?? "").trim();
+  }
+  if (typeof options.auto_detect === "boolean") {
+    result.autoDetect = options.auto_detect;
+  }
+  return result;
 }
 
 function numberFromEnv(name: string, fallback: number): number {

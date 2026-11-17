@@ -265,6 +265,60 @@ export interface SetStationRequest {
   noise_psk?: string;
 }
 
+// ───────────────────────────────────────────── debug API (§8.5) ──
+
+export interface DiscoveryStatusDto {
+  state: "pending" | "announced" | "failed" | "not_supervisor";
+  at: number | null;
+  host: string | null;
+  reason: string;
+}
+
+export interface DiagnosticsResponse {
+  version: string;
+  uptimeSec: number;
+  addon: {
+    port: number;
+    hostname: string | null;
+    supervisorTokenConfigured: boolean;
+    accessTokenConfigured: boolean;
+    discovery: DiscoveryStatusDto;
+  };
+  config: {
+    provider: string;
+    stt: { host: string; port: number };
+    tts: { mode: string; host: string; port: number; voice: string };
+  };
+  checks: {
+    ha: { ok: boolean; detail: string };
+    stt: { ok: boolean; detail: string };
+    tts: { ok: boolean; detail: string };
+  };
+  probes: {
+    stt: { host: string; port: number; ok: boolean; latencyMs: number; error: string };
+    tts: { host: string; port: number; ok: boolean; latencyMs: number; error: string };
+  };
+  integration: { connected: boolean; lastStationsAt: number | null };
+  station: { bound: boolean; name: string | null };
+}
+
+export interface ProbeRequest {
+  host: string;
+  port: number;
+  timeoutMs?: number;
+}
+
+export interface ProbeResponse {
+  ok: boolean;
+  latencyMs: number;
+  error: string;
+}
+
+export interface AutodetectResponse {
+  applied: boolean;
+  details: string;
+}
+
 export interface ErrorResponse {
   error: { code: string; message: string };
 }

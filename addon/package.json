@@ -1,6 +1,6 @@
 {
   "name": "pulsar-brain-addon",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Voice assistant brain for Yandex Station with pulsar firmware",
   "type": "module",

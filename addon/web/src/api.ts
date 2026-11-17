@@ -1,10 +1,14 @@
 import type {
+  AutodetectResponse,
   ConfigResponse,
+  DiagnosticsResponse,
   HaEntitiesResponse,
   LogsResponse,
   McpServersResponse,
   McpToolsResponse,
   ModelsResponse,
+  ProbeRequest,
+  ProbeResponse,
   PromptResponse,
   ProviderInfoResponse,
   SchedulesResponse,
@@ -227,6 +231,12 @@ export const api = {
     apiPost<unknown>(`/api/schedules/${encodeURIComponent(id)}/cancel`),
   haEntities: (signal?: AbortSignal) => apiGet<HaEntitiesResponse>("/api/ha/entities", signal),
   stations: (signal?: AbortSignal) => apiGet<StationsResponse>("/api/stations", signal),
+  diagnostics: (signal?: AbortSignal) =>
+    apiGet<DiagnosticsResponse>("/api/debug/diagnostics", signal),
+  rediscover: () =>
+    apiPost<{ announced: boolean; reason?: string; host?: string }>("/api/debug/rediscover"),
+  autodetect: () => apiPost<AutodetectResponse>("/api/debug/autodetect"),
+  probe: (request: ProbeRequest) => apiPost<ProbeResponse>("/api/debug/probe", request),
   bindStation: (request: SetStationRequest) => apiPost<unknown>("/api/station", request),
   clearStation: () => apiDelete<unknown>("/api/station"),
 };

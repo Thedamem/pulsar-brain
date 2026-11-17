@@ -1,5 +1,5 @@
 name: Pulsar Brain
-version: "0.2.0"
+version: "0.3.0"
 slug: pulsar_brain
 description: "Голосовой ассистент для Яндекс Станции с прошивкой pulsar: STT, LLM, инструменты, MCP, планировщик и веб-интерфейс"
 url: https://github.com/Thedamem/pulsar-brain
@@ -9,23 +9,31 @@ arch:
 startup: application
 boot: auto
 init: false
-# UI is reachable only through Home Assistant ingress. No ports are published:
-# the Python bridge talks to the app over the internal Supervisor network.
+# UI is reachable through Home Assistant ingress. The port below is optional: enable it in
+# the app's Network settings together with access_token when the API must be reached from
+# the LAN (debugging or an external agent).
 ingress: true
 ingress_port: 8097
 panel_title: Pulsar Brain
 panel_icon: mdi:account-voice
 panel_admin: true
+ports:
+  8097/tcp: null
+ports_description:
+  8097/tcp: "API и веб-интерфейс снаружи ingress (нужен access_token)"
 homeassistant_api: true
-hassio_api: true
-hassio_role: default
+# Supervisor discovery and /addons/self/info are available without hassio_api.
 watchdog: http://[HOST]:[PORT:8097]/health
-# Integrations that receive this addon's Supervisor discovery payload (§8.1).
+# Integrations that receive this addon's Supervisor discovery payload.
 discovery:
   - pulsar_brain
 # SQLite (sessions, schedules) is not safe to copy while running.
 backup: cold
 options:
   log_level: info
+  access_token: ""
+  auto_detect: true
 schema:
   log_level: list(trace|debug|info|warn|error)
+  access_token: password
+  auto_detect: bool

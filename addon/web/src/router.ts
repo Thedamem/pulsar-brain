@@ -7,6 +7,7 @@ export type SectionId =
   | "station"
   | "history"
   | "logs"
+  | "diagnostics"
   | "test"
   | "settings";
 
@@ -21,6 +22,7 @@ export const SECTIONS: ReadonlyArray<SectionDefinition> = [
   { id: "overview", path: "", title: "Обзор", group: "Наблюдение" },
   { id: "history", path: "history", title: "История", group: "Наблюдение" },
   { id: "logs", path: "logs", title: "Логи", group: "Наблюдение" },
+  { id: "diagnostics", path: "diagnostics", title: "Диагностика", group: "Наблюдение" },
   { id: "test", path: "test", title: "Тест", group: "Наблюдение" },
   { id: "providers", path: "providers", title: "Провайдеры", group: "Настройка" },
   { id: "assistant", path: "assistant", title: "Ассистент", group: "Настройка" },

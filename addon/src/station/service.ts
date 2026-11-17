@@ -51,6 +51,8 @@ export interface StationServiceDeps {
 export interface StationService {
   start(): Promise<void>;
   stationsResponse(): StationsResponse;
+  bindingName(): string | null;
+  integrationLastSeenAt(): number | null;
   setStations(entries: StationEntryDto[], current?: CurrentStationDto | null): Promise<void>;
   bind(request: SetStationRequest): Promise<StationsResponse>;
   clear(): Promise<StationsResponse>;
@@ -201,7 +203,15 @@ export function createStationService(deps: StationServiceDeps): StationService {
     return stationsResponse();
   };
 
-  return { start, stationsResponse, setStations, bind, clear };
+  return {
+    start,
+    stationsResponse,
+    bindingName: () => store.getBinding()?.name ?? null,
+    integrationLastSeenAt: () => lastStationsAt,
+    setStations,
+    bind,
+    clear,
+  };
 }
 
 /** Public projection: the PSK becomes a boolean and the plaintext never leaves the addon. */

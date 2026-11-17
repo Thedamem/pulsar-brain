@@ -136,7 +136,7 @@ ha apps logs pulsar_brain      # журнал сборки и запуска
   ```sh
   cd /config
   wget -O /tmp/pulsar_brain.zip \
-    https://github.com/Thedamem/pulsar-brain/releases/download/v0.2.0/pulsar_brain.zip
+    https://github.com/Thedamem/pulsar-brain/releases/download/v0.3.0/pulsar_brain.zip
   unzip -o /tmp/pulsar_brain.zip -d /config
   ```
 
@@ -221,6 +221,25 @@ token пришли от аддона через Supervisor discovery.
   automation HA.
 - **Промпт и алиасы.** UI → **Ассистент** (промпт, язык, follow-up, barge-in) и **Настройки**
   (алиасы, лог, токены).
+
+### Диагностика и внешний API
+
+В аддоне есть опциональный debug API для удалённой проверки. В разделе **Конфигурация** аддона:
+
+- `access_token` — токен для внешнего доступа (пусто = внешний API выключен);
+- `auto_detect` — автоматически искать Whisper/Piper по именам аддонов (по умолчанию включено).
+
+Затем в **Сеть** включите порт `8097`. Проверка:
+
+```sh
+curl -H "Authorization: Bearer <access_token>" http://<IP-HA>:8097/api/debug/diagnostics
+curl -X POST -H "Authorization: Bearer <access_token>" http://<IP-HA>:8097/api/debug/rediscover
+curl -X POST -H "Authorization: Bearer <access_token>" http://<IP-HA>:8097/api/debug/autodetect
+```
+
+В UI аддона появился раздел **Диагностика**: состояние discovery, проверки HA/Whisper/Piper,
+кнопки «Переотправить discovery» и «Автоопределить». Ошибка 502 на «Проверить голос» почти всегда
+означает, что Piper/Whisper не видны по настроенному адресу — нажмите «Автоопределить».
 
 ## 5. Обновление
 

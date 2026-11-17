@@ -1,7 +1,21 @@
 # Статус проекта pulsar-brain
 
-Обновлено: 2026-11-16, версия 0.2.0. Протоколы — [contracts.md](contracts.md), архитектура —
+Обновлено: 2026-11-16, версия 0.3.0. Протоколы — [contracts.md](contracts.md), архитектура —
 [architecture.md](architecture.md), установка — [install.md](install.md).
+
+## Что нового в 0.3.0
+
+- **Опциональный debug API.** В аддоне появились `access_token` и необязательный порт `8097`
+  снаружи ingress: диагностика (`/api/debug/diagnostics`), принудительная переотправка discovery,
+  TCP-проба адресов и автоопределение Whisper/Piper (`/api/debug/autodetect`). Без токена внешний
+  доступ закрыт, ingress работает как раньше.
+- **Автоопределение STT/TTS.** Если настроенный адрес Whisper/Piper недоступен (типичный случай —
+  `localhost` внутри контейнера), аддон ищет `core-whisper`/`core-piper` по именам в сети
+  Supervisor и сохраняет найденные адреса. Это лечит 502 на «Проверить голос» и озвучке.
+- **Discovery повторяется** каждые 5 минут, пока Supervisor не подтвердит объявление; результат
+  виден в «Диагностике» и доступен для ручной переотправки.
+- **Сборка без Docker Hub:** базовый образ Node берётся из `mirror.gcr.io`, поэтому Supervisor
+  собирает аддон из сетей, где Docker Hub недоступен (РФ).
 
 ## Что нового в 0.2.0
 
@@ -40,17 +54,21 @@
 ## Что проверено и как
 
 1. **Юнит/интеграционные тесты аддона**: `cd addon && npm run check && npm test` — tsc без ошибок,
-   **309 тестов passed, 1 skipped** (live-piper под env), включая станцию и Supervisor discovery.
-2. **Тесты моста**: `dev/.venv/bin/python -m pytest -q tests/bridge` — **67 passed**, включая
+   **314 тестов passed, 1 skipped** (live-piper под env), включая станцию, Supervisor discovery,
+   debug API и автоопределение STT/TTS.
+2. **Тесты моста**: `dev/.venv/bin/python -m pytest -q tests/bridge` — **73 passed**, включая
    discovery-пейлоад, привязку станции, миграцию 0.1.x и список станций;
    `python -m py_compile custom_components/pulsar_brain/*.py` — OK.
-3. **Станция на живом стенде**: миграция старой записи сработала, мост подключился к
+3. **Debug API на живом стенде**: `/api/debug/diagnostics`, `rediscover`, `autodetect`, `probe`
+   отвечают 401 без токена и корректными данными с токеном; сборка Docker-образа через
+   `mirror.gcr.io` проходит (Docker Hub недоступен).
+4. **Станция на живом стенде**: миграция старой записи сработала, мост подключился к
    mock-сателлиту, интеграция отправила список и текущую привязку в аддон, UI показал привязанную
    станцию, голосовой run выполнил команду; страница **Станция** проверена в Chromium (68 проверок).
-4. **E2E аддона без HA**: `dev/.venv/bin/python tests/e2e/run.py` — **10/10 passed**:
+5. **E2E аддона без HA**: `dev/.venv/bin/python tests/e2e/run.py` — **10/10 passed**:
    свет, свет+ТВ, «на 10 минут», «в 22:00», follow-up-эллипсис, barge-in, тишина,
    `/api/test/text`, `/api/test/audio`, `/api/tts/preview`.
-5. **E2E моста с настоящим ESPHome-протоколом (мок-сателлит) на локальном HA**:
+6. **E2E моста с настоящим ESPHome-протоколом (мок-сателлит) на локальном HA**:
    - интеграция установлена в HA Core, мост подключился к мок-устройству и владеет VA-слотом;
    - run «Алиса, включи свет»: STT Whisper → mock-LLM → `light.turn_on` в HA → свет включился →
      Piper TTS → мост опубликовал WAV по URL → мок скачал его **HTTP 200**;
@@ -78,7 +96,7 @@
 | Живая Яндекс Станция (Noise/PSK, реальный GStreamer-плейбек) | Нет PSK от боевого HA; стенд закрыт мок-сателлитом |
 | Живые OpenAI/OpenClaw/Gemini Live | Нет ключей/эндпоинтов; модули по документации + локальные мок-серверы |
 | HAOS/Supervisor: discovery, установка из репозитория, ingress, watchdog | Локальный HA Core без Supervisor; проверяется при установке на HAOS |
-| Пересборка Docker-образа аддона в этой сессии | Docker Hub недоступен из текущей сети (auth EOF); Dockerfile не менялся и собирался в 0.1.0 |
+
 | `scripts/install-local.sh` end-to-end | На стенде уже стоит compose-аддон и настроенная интеграция; шаги проверены вручную |
 
 ## Известные ограничения

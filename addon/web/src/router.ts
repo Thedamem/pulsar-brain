@@ -4,6 +4,7 @@ export type SectionId =
   | "assistant"
   | "mcp"
   | "scheduler"
+  | "station"
   | "history"
   | "logs"
   | "test"
@@ -25,6 +26,7 @@ export const SECTIONS: ReadonlyArray<SectionDefinition> = [
   { id: "assistant", path: "assistant", title: "Ассистент", group: "Настройка" },
   { id: "mcp", path: "mcp", title: "MCP", group: "Настройка" },
   { id: "scheduler", path: "scheduler", title: "Планировщик", group: "Настройка" },
+  { id: "station", path: "station", title: "Станция", group: "Настройка" },
   { id: "settings", path: "settings", title: "Настройки", group: "Настройка" },
 ];
 

@@ -8,6 +8,7 @@
 
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
+import packageJson from "../package.json" with { type: "json" };
 import type { LogLevel } from "./shared/types.js";
 import type { FastifyInstance } from "fastify";
 import type {
@@ -44,8 +45,11 @@ import { createAllSchedulerTools } from "./tools/scheduler.js";
 import { createHaRestAutomationWriter } from "./schedule/recurring.js";
 import { createHttpServer } from "./server/http.js";
 import { createBridgeServer } from "./server/bridge.js";
+import { createStationService } from "./station/service.js";
+import { registerStationApi } from "./station/api.js";
+import { announceAddonDiscovery } from "./supervisor/discovery.js";
 
-const VERSION = "0.1.0";
+const VERSION: string = packageJson.version;
 const DEFAULT_PORT = 8097;
 
 async function main(): Promise<void> {
@@ -63,6 +67,13 @@ async function main(): Promise<void> {
   });
 
   const ha = createHaClient(configStore, logger);
+  const stationService = createStationService({
+    configStore,
+    ha,
+    log: logger.child("station"),
+    dataDir: configStore.dataDir,
+  });
+  await stationService.start();
   const stt = createWyomingStt(initialConfig.stt, logger.child("stt"));
   const providers = createProviderRegistry(initialConfig, logger);
   const tts = createTtsRouter(configStore, logger);
@@ -184,6 +195,12 @@ async function main(): Promise<void> {
 
   await scheduler.start();
   const app = await startHttp(services);
+  registerStationApi(app, {
+    service: stationService,
+    bridgeToken: configStore.bridgeToken(),
+    uiToken: process.env.PULSAR_BRAIN_UI_TOKEN?.trim() ?? "",
+    log: logger.child("station.api"),
+  });
   bridge = createBridgeServer(app.server, {
     services,
     bridgeToken: configStore.bridgeToken(),
@@ -199,6 +216,17 @@ async function main(): Promise<void> {
     bridgeTokenConfigured: configStore.bridgeToken().length > 0,
     providers: providers.list().map((provider) => provider.id),
   });
+
+  const discovery = await announceAddonDiscovery({
+    log: logger.child("supervisor"),
+    bridgeToken: configStore.bridgeToken(),
+    version: VERSION,
+    addonPort: port,
+    ...(process.env.SUPERVISOR_TOKEN === undefined
+      ? {}
+      : { supervisorToken: process.env.SUPERVISOR_TOKEN }),
+  });
+  log.info("supervisor discovery", { ...discovery });
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {

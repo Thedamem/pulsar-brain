@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import logging
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -14,35 +14,27 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
-from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 
-from .bridge import AddonError, async_validate_addon
+from .bridge import AddonError, async_check_health, async_validate_addon
 from .const import (
     CONF_ADDON_HOST,
     CONF_ADDON_PORT,
     CONF_BRIDGE_TOKEN,
-    CONF_DEVICE_HOST,
-    CONF_DEVICE_NAME,
-    CONF_DEVICE_PORT,
     CONF_ENABLED,
-    CONF_ESP_ENTRY,
-    CONF_NOISE_PSK,
     CONF_TTS_BASE_URL,
     DEFAULT_ADDON_PORT,
-    DEFAULT_DEVICE_PORT,
     DEFAULT_ENABLED,
+    DISCOVERY_HEALTH_TIMEOUT,
     DOMAIN,
-    MANUAL_DEVICE,
+    NAME,
 )
+from .discovery import DiscoveryError, discovery_entry_data, parse_hassio_discovery
 
-
-def _describe_esphome_entry(entry: ConfigEntry) -> str:
-    host = entry.data.get(CONF_HOST, "")
-    port = entry.data.get(CONF_PORT, DEFAULT_DEVICE_PORT)
-    return f"{entry.title} ({host}:{port})"
+_LOGGER = logging.getLogger(__name__)
 
 
 def _is_http_base_url(value: str) -> bool:
@@ -56,43 +48,104 @@ def _is_http_base_url(value: str) -> bool:
     )
 
 
+def _port(value: object, default: int) -> int:
+    try:
+        port = int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    return port if 0 < port < 65536 else default
+
+
 class PulsarBrainConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Two-step flow: addon endpoint, then the ESPHome speaker."""
+    """Supervisor discovery and manual addon setup.
+
+    The station is never chosen here: the addon owns that UI and calls
+    ``pulsar_brain.set_station`` afterwards (docs/contracts.md §8).
+    """
 
     VERSION = 1
 
-    def __init__(self) -> None:
-        self._addon_data: dict[str, Any] = {}
+    async def async_step_hassio(
+        self, discovery_info: HassioServiceInfo
+    ) -> ConfigFlowResult:
+        """Create the entry from the addon's Supervisor announcement."""
+        try:
+            discovery = parse_hassio_discovery(
+                discovery_info.config,
+                unique_id=discovery_info.uuid,
+                slug=discovery_info.slug,
+            )
+        except DiscoveryError as err:
+            _LOGGER.warning("Ignoring Pulsar Brain discovery: %s", err)
+            return self.async_abort(reason="invalid_discovery")
+
+        await self.async_set_unique_id(discovery.unique_id)
+        self._abort_if_unique_id_configured()
+
+        try:
+            await async_check_health(
+                async_get_clientsession(self.hass),
+                discovery.host,
+                discovery.port,
+                timeout=DISCOVERY_HEALTH_TIMEOUT,
+            )
+        except AddonError as err:
+            _LOGGER.warning(
+                "Pulsar Brain addon %s:%s failed its health check: %s",
+                discovery.host,
+                discovery.port,
+                err.code,
+            )
+            return self.async_abort(reason="cannot_connect")
+        except Exception:  # noqa: BLE001 - malformed answers are connection failures
+            _LOGGER.exception("Pulsar Brain addon discovery failed")
+            return self.async_abort(reason="cannot_connect")
+
+        return self.async_create_entry(
+            title=NAME,
+            data=discovery_entry_data(discovery),
+            options=_default_options(),
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the addon endpoint and verify it before the device step."""
+        """Manual setup: addon address and bridge token only."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            host = str(user_input[CONF_ADDON_HOST]).strip()
-            port = int(user_input[CONF_ADDON_PORT])
-            token = str(user_input[CONF_BRIDGE_TOKEN]).strip()
-            try:
-                await async_validate_addon(
-                    async_get_clientsession(self.hass), host, port, token
-                )
-            except AddonError as err:
-                errors["base"] = (
-                    "invalid_auth" if err.status in (401, 403) else "cannot_connect"
-                )
-            except Exception:  # noqa: BLE001 - malformed responses are connection errors
-                errors["base"] = "cannot_connect"
+            host = str(user_input.get(CONF_ADDON_HOST, "")).strip()
+            port = int(user_input.get(CONF_ADDON_PORT, DEFAULT_ADDON_PORT))
+            token = str(user_input.get(CONF_BRIDGE_TOKEN, "")).strip()
+            if not host:
+                errors[CONF_ADDON_HOST] = "addon_host_required"
+            elif not token:
+                errors[CONF_BRIDGE_TOKEN] = "bridge_token_required"
             else:
-                self._addon_data = {
-                    CONF_ADDON_HOST: host,
-                    CONF_ADDON_PORT: port,
-                    CONF_BRIDGE_TOKEN: token,
-                }
-                return await self.async_step_device()
+                try:
+                    await async_validate_addon(
+                        async_get_clientsession(self.hass), host, port, token
+                    )
+                except AddonError as err:
+                    errors["base"] = (
+                        "invalid_auth"
+                        if err.status in (401, 403)
+                        else "cannot_connect"
+                    )
+                except Exception:  # noqa: BLE001 - malformed responses are errors
+                    errors["base"] = "cannot_connect"
+                else:
+                    return self.async_create_entry(
+                        title=NAME,
+                        data={
+                            CONF_ADDON_HOST: host,
+                            CONF_ADDON_PORT: port,
+                            CONF_BRIDGE_TOKEN: token,
+                        },
+                        options=_default_options(),
+                    )
 
         return self.async_show_form(
             step_id="user",
@@ -112,134 +165,6 @@ class PulsarBrainConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_device(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Pick an existing ESPHome entry or enter the device manually."""
-        errors: dict[str, str] = {}
-        choices = self._device_choices()
-
-        if user_input is not None:
-            selection = str(user_input[CONF_ESP_ENTRY])
-            entry_id = choices.get(selection)
-            if entry_id is None:
-                errors["base"] = "unknown"
-            elif entry_id == MANUAL_DEVICE:
-                device = self._manual_device(user_input)
-                if device is None:
-                    errors[CONF_DEVICE_HOST] = "manual_host_required"
-                else:
-                    return await self._async_create_entry(device, entry_id)
-            else:
-                entry = self.hass.config_entries.async_get_entry(entry_id)
-                if entry is None:
-                    errors["base"] = "esphome_entry_missing"
-                else:
-                    device = self._device_from_entry(entry)
-                    if not device[CONF_DEVICE_HOST]:
-                        errors["base"] = "esphome_entry_missing"
-                    else:
-                        return await self._async_create_entry(device, entry_id)
-
-        submitted = user_input or {}
-        default_choice = str(
-            submitted.get(CONF_ESP_ENTRY, next(iter(choices), MANUAL_DEVICE))
-        )
-        return self.async_show_form(
-            step_id="device",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_ESP_ENTRY, default=default_choice): vol.In(
-                        list(choices)
-                    ),
-                    vol.Optional(
-                        CONF_DEVICE_HOST, default=str(submitted.get(CONF_DEVICE_HOST, ""))
-                    ): str,
-                    vol.Optional(
-                        CONF_DEVICE_PORT,
-                        default=int(submitted.get(CONF_DEVICE_PORT, DEFAULT_DEVICE_PORT)),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-                    vol.Optional(
-                        CONF_NOISE_PSK, default=str(submitted.get(CONF_NOISE_PSK, ""))
-                    ): selector.TextSelector(
-                        selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.PASSWORD
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_DEVICE_NAME, default=str(submitted.get(CONF_DEVICE_NAME, ""))
-                    ): str,
-                }
-            ),
-            description_placeholders={
-                "devices": ", ".join(
-                    label for label, value in choices.items() if value != MANUAL_DEVICE
-                )
-                or "—",
-            },
-            errors=errors,
-        )
-
-    @callback
-    def _device_choices(self) -> dict[str, str]:
-        choices: dict[str, str] = {}
-        for entry in self.hass.config_entries.async_entries("esphome"):
-            label = _describe_esphome_entry(entry)
-            if label in choices:
-                label = f"{label} [{entry.entry_id}]"
-            choices[label] = entry.entry_id
-        choices["Ввести вручную"] = MANUAL_DEVICE
-        return choices
-
-    @staticmethod
-    def _device_from_entry(entry: ConfigEntry) -> dict[str, Any]:
-        return {
-            CONF_DEVICE_HOST: str(entry.data.get(CONF_HOST, "")).strip(),
-            CONF_DEVICE_PORT: int(
-                entry.data.get(CONF_PORT, DEFAULT_DEVICE_PORT) or DEFAULT_DEVICE_PORT
-            ),
-            CONF_NOISE_PSK: str(entry.data.get(CONF_NOISE_PSK) or "").strip(),
-            CONF_DEVICE_NAME: str(
-                entry.data.get(CONF_DEVICE_NAME) or entry.title or ""
-            ).strip(),
-        }
-
-    @staticmethod
-    def _manual_device(user_input: Mapping[str, Any]) -> dict[str, Any] | None:
-        host = str(user_input.get(CONF_DEVICE_HOST, "")).strip()
-        if not host:
-            return None
-        return {
-            CONF_DEVICE_HOST: host,
-            CONF_DEVICE_PORT: int(user_input.get(CONF_DEVICE_PORT, DEFAULT_DEVICE_PORT)),
-            CONF_NOISE_PSK: str(user_input.get(CONF_NOISE_PSK, "")).strip(),
-            CONF_DEVICE_NAME: str(user_input.get(CONF_DEVICE_NAME, "")).strip(),
-        }
-
-    async def _async_create_entry(
-        self,
-        device: Mapping[str, Any],
-        entry_id: str,
-    ) -> ConfigFlowResult:
-        host = str(device[CONF_DEVICE_HOST])
-        await self.async_set_unique_id(
-            f"{self._addon_data[CONF_ADDON_HOST]}:{host}"
-        )
-        self._abort_if_unique_id_configured()
-        name = str(device.get(CONF_DEVICE_NAME) or host)
-        return self.async_create_entry(
-            title=name,
-            data={
-                **self._addon_data,
-                **device,
-                CONF_ESP_ENTRY: entry_id,
-            },
-            options={
-                CONF_TTS_BASE_URL: "",
-                CONF_ENABLED: DEFAULT_ENABLED,
-            },
-        )
-
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlowWithReload:
@@ -248,39 +173,114 @@ class PulsarBrainConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class PulsarBrainOptionsFlow(OptionsFlowWithReload):
-    """Options: TTS base URL override and the master enable switch."""
+    """Addon connection override, TTS base URL and the master enable switch."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
-        options = dict(self.config_entry.options)
+        entry = self.config_entry
+        current = {**entry.data, **entry.options}
+
         if user_input is not None:
+            host = str(user_input.get(CONF_ADDON_HOST, "")).strip()
+            port = _port(user_input.get(CONF_ADDON_PORT), DEFAULT_ADDON_PORT)
+            token = str(user_input.get(CONF_BRIDGE_TOKEN, "")).strip()
             base_url = str(user_input.get(CONF_TTS_BASE_URL, "")).strip().rstrip("/")
-            if base_url and not _is_http_base_url(base_url):
+            if not host:
+                errors[CONF_ADDON_HOST] = "addon_host_required"
+            elif not token:
+                errors[CONF_BRIDGE_TOKEN] = "bridge_token_required"
+            elif base_url and not _is_http_base_url(base_url):
                 errors[CONF_TTS_BASE_URL] = "invalid_tts_base_url"
             else:
-                return self.async_create_entry(
-                    data={
-                        **options,
-                        CONF_TTS_BASE_URL: base_url,
-                        CONF_ENABLED: bool(user_input.get(CONF_ENABLED, True)),
-                    }
+                current_host = str(entry.data.get(CONF_ADDON_HOST, "")).strip()
+                current_port = _port(
+                    entry.data.get(CONF_ADDON_PORT), DEFAULT_ADDON_PORT
                 )
+                current_token = str(entry.data.get(CONF_BRIDGE_TOKEN, ""))
+                connection_changed = (host, port, token) != (
+                    current_host,
+                    current_port,
+                    current_token,
+                )
+                if connection_changed:
+                    try:
+                        await async_validate_addon(
+                            async_get_clientsession(self.hass), host, port, token
+                        )
+                    except AddonError as err:
+                        errors["base"] = (
+                            "invalid_auth"
+                            if err.status in (401, 403)
+                            else "cannot_connect"
+                        )
+                    except Exception:  # noqa: BLE001 - malformed responses are errors
+                        errors["base"] = "cannot_connect"
+
+                if not errors:
+                    options = {
+                        **entry.options,
+                        CONF_TTS_BASE_URL: base_url,
+                        CONF_ENABLED: bool(
+                            user_input.get(CONF_ENABLED, DEFAULT_ENABLED)
+                        ),
+                    }
+                    if connection_changed:
+                        self.hass.config_entries.async_update_entry(
+                            entry,
+                            data={
+                                **entry.data,
+                                CONF_ADDON_HOST: host,
+                                CONF_ADDON_PORT: port,
+                                CONF_BRIDGE_TOKEN: token,
+                            },
+                        )
+                    result = self.async_create_entry(data=options)
+                    if connection_changed and options == dict(entry.options):
+                        # Options did not change, so OptionsFlowWithReload has
+                        # nothing to reload; the edited addon address still needs it.
+                        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                    return result
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Required(
+                        CONF_ADDON_HOST,
+                        default=str(current.get(CONF_ADDON_HOST, "")),
+                    ): str,
+                    vol.Required(
+                        CONF_ADDON_PORT,
+                        default=_port(
+                            current.get(CONF_ADDON_PORT), DEFAULT_ADDON_PORT
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                    vol.Required(
+                        CONF_BRIDGE_TOKEN,
+                        default=str(current.get(CONF_BRIDGE_TOKEN, "")),
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    ),
                     vol.Optional(
                         CONF_TTS_BASE_URL,
-                        default=str(options.get(CONF_TTS_BASE_URL, "")),
+                        default=str(current.get(CONF_TTS_BASE_URL, "")),
                     ): str,
                     vol.Optional(
                         CONF_ENABLED,
-                        default=bool(options.get(CONF_ENABLED, DEFAULT_ENABLED)),
+                        default=bool(current.get(CONF_ENABLED, DEFAULT_ENABLED)),
                     ): bool,
                 }
             ),
             errors=errors,
         )
+
+
+def _default_options() -> dict[str, object]:
+    return {
+        CONF_TTS_BASE_URL: "",
+        CONF_ENABLED: DEFAULT_ENABLED,
+    }

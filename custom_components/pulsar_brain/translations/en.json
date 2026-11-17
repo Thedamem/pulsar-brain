@@ -3,22 +3,11 @@
     "step": {
       "user": {
         "title": "Pulsar Brain: addon",
-        "description": "Address of the pulsar_brain addon and the bridge token from its settings.",
+        "description": "Address of the pulsar_brain addon and the bridge token from its settings. The station is selected in the addon.",
         "data": {
           "addon_host": "Addon host",
           "addon_port": "Addon port",
           "bridge_token": "Bridge token"
-        }
-      },
-      "device": {
-        "title": "Pulsar Brain: speaker",
-        "description": "Pick a configured ESPHome device or enter its address manually. Available devices: {devices}",
-        "data": {
-          "esphome_entry": "ESPHome device",
-          "device_host": "Speaker host",
-          "device_port": "ESPHome API port",
-          "noise_psk": "Noise PSK",
-          "device_name": "Device name"
         }
       }
     },
@@ -26,28 +15,36 @@
       "cannot_connect": "Could not connect to the addon",
       "invalid_auth": "Invalid bridge token",
       "unknown": "Unknown error",
-      "manual_host_required": "Enter the speaker host for manual setup",
-      "esphome_entry_missing": "The ESPHome device no longer exists",
-      "invalid_tts_base_url": "Use an http(s) base URL without a path, for example http://homeassistant.local:8123"
+      "addon_host_required": "Enter the addon host",
+      "bridge_token_required": "Enter the bridge token"
     },
     "abort": {
       "single_instance_allowed": "Already configured",
-      "already_configured": "This device is already configured"
+      "already_configured": "This addon is already configured",
+      "invalid_discovery": "Supervisor sent incomplete addon details",
+      "cannot_connect": "The addon did not answer the health check"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Pulsar Brain",
-        "description": "Base URL the speaker uses to download answers, and the master switch.",
+        "description": "Addon connection, TTS base URL and the master bridge switch.",
         "data": {
+          "addon_host": "Addon host",
+          "addon_port": "Addon port",
+          "bridge_token": "Bridge token",
           "tts_base_url": "TTS base URL (optional)",
           "enabled": "Bridge enabled"
         }
       }
     },
     "error": {
-      "invalid_tts_base_url": "Use an http(s) base URL without a path, for example http://homeassistant.local:8123"
+      "invalid_tts_base_url": "Use an http(s) base URL without a path, for example http://homeassistant.local:8123",
+      "addon_host_required": "Enter the addon host",
+      "bridge_token_required": "Enter the bridge token",
+      "cannot_connect": "Could not connect to the addon",
+      "invalid_auth": "Invalid bridge token"
     }
   },
   "entity": {
@@ -57,6 +54,9 @@
       }
     },
     "sensor": {
+      "station": {
+        "name": "Station"
+      },
       "last_transcript": {
         "name": "Last transcript"
       },
@@ -107,6 +107,40 @@
           "description": "assist_satellite entity; required when there are several."
         }
       }
+    },
+    "set_station": {
+      "name": "Bind station",
+      "description": "Store the selected ESPHome station and reload the bridge. Called by the addon.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Integration entry",
+          "description": "Pulsar Brain config entry id; the only entry is used by default."
+        },
+        "entry_id": {
+          "name": "ESPHome entry",
+          "description": "ESPHome config entry id; host, port and PSK are read from it."
+        },
+        "name": {
+          "name": "Station name",
+          "description": "Required for a manual binding."
+        },
+        "host": {
+          "name": "Station host",
+          "description": "Required for a manual binding."
+        },
+        "port": {
+          "name": "ESPHome API port",
+          "description": "Defaults to 6053."
+        },
+        "noise_psk": {
+          "name": "Noise PSK",
+          "description": "Manual binding only; discovered entries provide it themselves."
+        },
+        "clear": {
+          "name": "Unbind",
+          "description": "Remove the station binding and stop the bridge."
+        }
+      }
     }
   },
   "exceptions": {
@@ -124,6 +158,24 @@
     },
     "voice_run_active": {
       "message": "Cannot announce while a voice dialog is active"
+    },
+    "config_entry_not_found": {
+      "message": "Pulsar Brain entry {entry_id} was not found"
+    },
+    "integration_not_configured": {
+      "message": "The Pulsar Brain integration is not set up"
+    },
+    "esphome_entry_missing": {
+      "message": "No ESPHome device with this entry_id"
+    },
+    "esphome_entry_incomplete": {
+      "message": "The ESPHome entry has no device address"
+    },
+    "station_name_required": {
+      "message": "Enter a station name for a manual binding"
+    },
+    "station_host_required": {
+      "message": "Enter a station host for a manual binding"
     }
   }
 }

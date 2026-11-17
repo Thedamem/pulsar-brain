@@ -9,6 +9,8 @@ import type {
   ProviderInfoResponse,
   SchedulesResponse,
   SessionsResponse,
+  SetStationRequest,
+  StationsResponse,
   StatusResponse,
   TestAudioResponse,
   TestTextResponse,
@@ -224,6 +226,9 @@ export const api = {
   cancelSchedule: (id: string) =>
     apiPost<unknown>(`/api/schedules/${encodeURIComponent(id)}/cancel`),
   haEntities: (signal?: AbortSignal) => apiGet<HaEntitiesResponse>("/api/ha/entities", signal),
+  stations: (signal?: AbortSignal) => apiGet<StationsResponse>("/api/stations", signal),
+  bindStation: (request: SetStationRequest) => apiPost<unknown>("/api/station", request),
+  clearStation: () => apiDelete<unknown>("/api/station"),
 };
 
 export interface RunNowResponse {

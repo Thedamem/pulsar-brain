@@ -216,6 +216,55 @@ export interface HaEntitiesResponse {
 
 export interface StatusResponse extends StatusSnapshot {}
 
+// ─────────────────────────────────────────── station binding (§8) ──
+
+export interface StationEntryDto {
+  entry_id: string;
+  name: string;
+  host: string;
+  port: number;
+  mac: string;
+}
+
+export interface StationBindingDto {
+  mode: "discovered" | "manual";
+  entry_id: string;
+  name: string;
+  host: string;
+  port: number;
+  has_psk: boolean;
+  bound_at: number;
+}
+
+export interface CurrentStationDto {
+  mode: "discovered" | "manual";
+  entry_id: string;
+  name: string;
+  host: string;
+  port: number;
+  has_psk: boolean;
+}
+
+export interface StationsPushRequest {
+  stations: StationEntryDto[];
+  /** Current binding on the Home Assistant side; absent when unknown. */
+  current?: CurrentStationDto | null;
+}
+
+export interface StationsResponse {
+  stations: StationEntryDto[];
+  binding: StationBindingDto | null;
+  integration_connected: boolean;
+}
+
+export interface SetStationRequest {
+  entry_id?: string;
+  name?: string;
+  host?: string;
+  port?: number;
+  noise_psk?: string;
+}
+
 export interface ErrorResponse {
   error: { code: string; message: string };
 }

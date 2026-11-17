@@ -19,6 +19,7 @@ from .const import (
     ADDON_HEALTH_PATH,
     ADDON_PROVIDERS_PATH,
     ADDON_REQUEST_TIMEOUT,
+    ADDON_STATIONS_PATH,
     ADDON_STATUS_PATH,
     ADDON_TEST_TEXT_PATH,
     BRIDGE_CONNECT_TIMEOUT,
@@ -177,6 +178,17 @@ class AddonClient:
             raise AddonError("invalid_text", "Text is empty")
         return await self._request("POST", ADDON_TEST_TEXT_PATH, {"text": text})
 
+    async def async_push_stations(
+        self,
+        stations: list[dict[str, object]],
+        current: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        """POST /api/stations with the ESPHome devices and the current binding."""
+        body: dict[str, object] = {"stations": stations}
+        if current is not None:
+            body["current"] = current
+        return await self._request("POST", ADDON_STATIONS_PATH, body)
+
     def provider_id_from_config(self, payload: Mapping[str, object]) -> str | None:
         """Extract config.provider.id from GET /api/config."""
         config = payload.get("config")
@@ -229,6 +241,43 @@ async def async_validate_addon(
         raise AddonError("unhealthy", "Addon health check did not report ok")
     status = await client.async_status()
     return health, status
+
+
+async def async_check_health(
+    session: aiohttp.ClientSession,
+    host: str,
+    port: int,
+    *,
+    timeout: float = 5.0,
+) -> dict[str, object]:
+    """Check the addon's open /health endpoint without a bearer token.
+
+    Supervisor discovery only carries the addon address and token, so the flow proves
+    the endpoint answers before creating an entry.
+    """
+    if not 0 < port < 65536:
+        raise AddonError("invalid_port", "Addon port is out of range")
+    url = f"http://{_host_for_url(host)}:{port}{ADDON_HEALTH_PATH}"
+    try:
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as response:
+            status = response.status
+            body = await response.read()
+    except aiohttp.ClientError as err:
+        raise AddonError("connection_error", str(err)) from err
+    except TimeoutError as err:
+        raise AddonError("timeout", "Addon health check timed out") from err
+    if status >= 400:
+        raise AddonError(
+            "unhealthy",
+            f"Addon health returned HTTP {status}",
+            status,
+        )
+    payload = _parse_json_body(body)
+    if payload.get("status") != "ok":
+        raise AddonError("unhealthy", "Addon health check did not report ok")
+    return payload
 
 
 class BridgeClient:

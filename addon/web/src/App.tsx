@@ -10,6 +10,7 @@ import { ProvidersPage } from "./pages/Providers";
 import { AssistantPage } from "./pages/Assistant";
 import { McpPage } from "./pages/Mcp";
 import { SchedulerPage } from "./pages/Scheduler";
+import { StationPage } from "./pages/Station";
 import { HistoryPage } from "./pages/History";
 import { LogsPage } from "./pages/Logs";
 import { TestPage } from "./pages/Test";
@@ -23,6 +24,7 @@ const PAGES: Record<SectionId, ComponentType> = {
   assistant: AssistantPage,
   mcp: McpPage,
   scheduler: SchedulerPage,
+  station: StationPage,
   history: HistoryPage,
   logs: LogsPage,
   test: TestPage,

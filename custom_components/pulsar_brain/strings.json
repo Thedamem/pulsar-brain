@@ -3,22 +3,11 @@
     "step": {
       "user": {
         "title": "Pulsar Brain: аддон",
-        "description": "Адрес аддона pulsar_brain и токен моста из его настроек.",
+        "description": "Адрес аддона pulsar_brain и токен моста из его настроек. Станция выбирается в аддоне.",
         "data": {
           "addon_host": "Хост аддона",
           "addon_port": "Порт аддона",
           "bridge_token": "Токен моста"
-        }
-      },
-      "device": {
-        "title": "Pulsar Brain: колонка",
-        "description": "Выберите настроенное устройство ESPHome или введите адрес вручную. Доступные устройства: {devices}",
-        "data": {
-          "esphome_entry": "Устройство ESPHome",
-          "device_host": "Хост колонки",
-          "device_port": "Порт ESPHome API",
-          "noise_psk": "Noise PSK",
-          "device_name": "Имя устройства"
         }
       }
     },
@@ -26,28 +15,36 @@
       "cannot_connect": "Не удалось подключиться к аддону",
       "invalid_auth": "Неверный токен моста",
       "unknown": "Неизвестная ошибка",
-      "manual_host_required": "Укажите хост колонки для ручного ввода",
-      "esphome_entry_missing": "Устройство ESPHome больше не существует",
-      "invalid_tts_base_url": "Нужен http(s)-адрес без пути, например http://homeassistant.local:8123"
+      "addon_host_required": "Укажите хост аддона",
+      "bridge_token_required": "Укажите токен моста"
     },
     "abort": {
       "single_instance_allowed": "Интеграция уже настроена",
-      "already_configured": "Это устройство уже настроено"
+      "already_configured": "Этот аддон уже настроен",
+      "invalid_discovery": "Supervisor прислал неполные данные аддона",
+      "cannot_connect": "Аддон не ответил на проверку здоровья"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Pulsar Brain",
-        "description": "Базовый URL, по которому колонка скачает ответ, и главный выключатель моста.",
+        "description": "Подключение к аддону, базовый URL для TTS и главный выключатель моста.",
         "data": {
+          "addon_host": "Хост аддона",
+          "addon_port": "Порт аддона",
+          "bridge_token": "Токен моста",
           "tts_base_url": "Базовый URL для TTS (необязательно)",
           "enabled": "Мост включён"
         }
       }
     },
     "error": {
-      "invalid_tts_base_url": "Нужен http(s)-адрес без пути, например http://homeassistant.local:8123"
+      "invalid_tts_base_url": "Нужен http(s)-адрес без пути, например http://homeassistant.local:8123",
+      "addon_host_required": "Укажите хост аддона",
+      "bridge_token_required": "Укажите токен моста",
+      "cannot_connect": "Не удалось подключиться к аддону",
+      "invalid_auth": "Неверный токен моста"
     }
   },
   "entity": {
@@ -57,6 +54,9 @@
       }
     },
     "sensor": {
+      "station": {
+        "name": "Станция"
+      },
       "last_transcript": {
         "name": "Последняя фраза"
       },
@@ -107,6 +107,40 @@
           "description": "Сущность assist_satellite; обязательна, если их несколько."
         }
       }
+    },
+    "set_station": {
+      "name": "Привязать станцию",
+      "description": "Сохранить выбранную станцию ESPHome и перезагрузить мост. Вызывается аддоном.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Запись интеграции",
+          "description": "ID записи Pulsar Brain; по умолчанию используется единственная."
+        },
+        "entry_id": {
+          "name": "Запись ESPHome",
+          "description": "ID записи интеграции ESPHome; host, port и PSK берутся из неё."
+        },
+        "name": {
+          "name": "Имя станции",
+          "description": "Нужно для ручной привязки."
+        },
+        "host": {
+          "name": "Хост станции",
+          "description": "Нужен для ручной привязки."
+        },
+        "port": {
+          "name": "Порт ESPHome API",
+          "description": "По умолчанию 6053."
+        },
+        "noise_psk": {
+          "name": "Noise PSK",
+          "description": "Только для ручной привязки; для записи ESPHome берётся из неё."
+        },
+        "clear": {
+          "name": "Отвязать",
+          "description": "Убрать привязку станции и остановить мост."
+        }
+      }
     }
   },
   "exceptions": {
@@ -124,6 +158,24 @@
     },
     "voice_run_active": {
       "message": "Нельзя объявлять во время голосового диалога"
+    },
+    "config_entry_not_found": {
+      "message": "Запись Pulsar Brain {entry_id} не найдена"
+    },
+    "integration_not_configured": {
+      "message": "Интеграция Pulsar Brain не настроена"
+    },
+    "esphome_entry_missing": {
+      "message": "Устройство ESPHome с таким entry_id не найдено"
+    },
+    "esphome_entry_incomplete": {
+      "message": "В записи ESPHome нет адреса устройства"
+    },
+    "station_name_required": {
+      "message": "Для ручной привязки укажите имя станции"
+    },
+    "station_host_required": {
+      "message": "Для ручной привязки укажите хост станции"
     }
   }
 }

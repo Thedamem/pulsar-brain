@@ -1,7 +1,22 @@
 # Статус проекта pulsar-brain
 
-Обновлено: 2026-11-16, версия 0.1.0. Протоколы — [contracts.md](contracts.md), архитектура —
+Обновлено: 2026-11-16, версия 0.2.0. Протоколы — [contracts.md](contracts.md), архитектура —
 [architecture.md](architecture.md), установка — [install.md](install.md).
+
+## Что нового в 0.2.0
+
+- **Zero-credential настройка.** Аддон объявляет себя Home Assistant через Supervisor discovery
+  (`host`, `port`, `bridge_token`); интеграция создаёт config entry автоматически — без полей и
+  токенов в HA. Вне Supervisor (HA Core) остаётся ручная настройка.
+- **Станция привязывается в аддоне.** Раздел **Станция**: список ESPHome-устройств приходит из
+  интеграции, выбор передаётся в HA сервисом `pulsar_brain.set_station`; PSK берётся из записи
+  ESPHome и не покидает Home Assistant. Для станций без записи ESPHome — ручной host/port/PSK.
+- **Синхронизация привязки.** Интеграция присылает в аддон текущую привязку, поэтому UI не теряет
+  станцию после перезапуска и после обновления.
+- **Миграция 0.1.x.** Старая запись (`device_host`/`device_port`/`noise_psk` в `entry.data`)
+  автоматически переносится в `entry.options["station"]`; мост продолжает работать.
+- **`sensor.station`** показывает привязанную колонку; `binary_sensor.connection` включается после
+  привязки.
 
 ## Что реализовано
 
@@ -25,13 +40,17 @@
 ## Что проверено и как
 
 1. **Юнит/интеграционные тесты аддона**: `cd addon && npm run check && npm test` — tsc без ошибок,
-   **300 тестов passed, 1 skipped** (live-piper под env).
-2. **Тесты моста**: `dev/.venv/bin/python -m pytest -q tests/bridge` — **58 passed**;
+   **309 тестов passed, 1 skipped** (live-piper под env), включая станцию и Supervisor discovery.
+2. **Тесты моста**: `dev/.venv/bin/python -m pytest -q tests/bridge` — **67 passed**, включая
+   discovery-пейлоад, привязку станции, миграцию 0.1.x и список станций;
    `python -m py_compile custom_components/pulsar_brain/*.py` — OK.
-3. **E2E аддона без HA**: `dev/.venv/bin/python tests/e2e/run.py` — **10/10 passed**:
+3. **Станция на живом стенде**: миграция старой записи сработала, мост подключился к
+   mock-сателлиту, интеграция отправила список и текущую привязку в аддон, UI показал привязанную
+   станцию, голосовой run выполнил команду; страница **Станция** проверена в Chromium (68 проверок).
+4. **E2E аддона без HA**: `dev/.venv/bin/python tests/e2e/run.py` — **10/10 passed**:
    свет, свет+ТВ, «на 10 минут», «в 22:00», follow-up-эллипсис, barge-in, тишина,
    `/api/test/text`, `/api/test/audio`, `/api/tts/preview`.
-4. **E2E моста с настоящим ESPHome-протоколом (мок-сателлит) на локальном HA**:
+5. **E2E моста с настоящим ESPHome-протоколом (мок-сателлит) на локальном HA**:
    - интеграция установлена в HA Core, мост подключился к мок-устройству и владеет VA-слотом;
    - run «Алиса, включи свет»: STT Whisper → mock-LLM → `light.turn_on` в HA → свет включился →
      Piper TTS → мост опубликовал WAV по URL → мок скачал его **HTTP 200**;
@@ -58,7 +77,8 @@
 |---|---|
 | Живая Яндекс Станция (Noise/PSK, реальный GStreamer-плейбек) | Нет PSK от боевого HA; стенд закрыт мок-сателлитом |
 | Живые OpenAI/OpenClaw/Gemini Live | Нет ключей/эндпоинтов; модули по документации + локальные мок-серверы |
-| HAOS/Supervisor: установка из репозитория, ingress, watchdog | Локальный HA Core без Supervisor; проверяется при установке на HAOS |
+| HAOS/Supervisor: discovery, установка из репозитория, ingress, watchdog | Локальный HA Core без Supervisor; проверяется при установке на HAOS |
+| Пересборка Docker-образа аддона в этой сессии | Docker Hub недоступен из текущей сети (auth EOF); Dockerfile не менялся и собирался в 0.1.0 |
 | `scripts/install-local.sh` end-to-end | На стенде уже стоит compose-аддон и настроенная интеграция; шаги проверены вручную |
 
 ## Известные ограничения

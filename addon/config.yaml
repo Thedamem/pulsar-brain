@@ -1,5 +1,5 @@
 name: Pulsar Brain
-version: "0.1.0"
+version: "0.2.0"
 slug: pulsar_brain
 description: "Голосовой ассистент для Яндекс Станции с прошивкой pulsar: STT, LLM, инструменты, MCP, планировщик и веб-интерфейс"
 url: https://github.com/Thedamem/pulsar-brain
@@ -20,6 +20,9 @@ homeassistant_api: true
 hassio_api: true
 hassio_role: default
 watchdog: http://[HOST]:[PORT:8097]/health
+# Integrations that receive this addon's Supervisor discovery payload (§8.1).
+discovery:
+  - pulsar_brain
 # SQLite (sessions, schedules) is not safe to copy while running.
 backup: cold
 options:

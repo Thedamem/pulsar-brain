@@ -108,106 +108,92 @@ ha apps logs pulsar_brain      # журнал сборки и запуска
 
 Если сборка падает, смотри §7 «Сборка аддона падает».
 
-### 2.4. Первый запуск и bridge token
+### 2.4. Первый запуск
 
-1. Открой UI аддона: страница аддона → **Open Web UI** (ingress).
-2. UI может показать экран входа с токеном. За ingress API уже авторизован Supervisor, поэтому
-   подойдёт любое непустое значение (например, `ingress`); после входа открой **Настройки** и
-   скопируй **bridge token**. Для прямого доступа (без ingress) нужен настоящий
-   `PULSAR_BRAIN_UI_TOKEN`.
-3. Токен хранится в `/data/bridge-token.json` внутри контейнера аддона. Это секрет: не коммить,
-   не вставляй в чаты и не печатай целиком в логи.
+1. Открой UI аддона: страница аддона → **Open Web UI** (ingress). За ingress Supervisor уже
+   аутентифицировал пользователя, токен вводить не нужно.
+2. При старте аддон объявляет себя Home Assistant через Supervisor discovery — в HA появится
+   обнаруженная интеграция **Pulsar Brain** (см. §3.2).
+3. **Bridge token** вводить не требуется. Он нужен только для ручной настройки интеграции, если
+   автообнаружение отключено, и показан в **Настройки → Токен моста** аддона. Это секрет:
+   не коммить, не вставляй в чаты и не печатай целиком в логи.
 
 Ожидаемо: UI открывается, **Обзор** показывает статус сервиса и здоровье Whisper/Piper/HA,
-**Настройки** позволяют скопировать bridge token.
+в разделе **Станция** — «не привязана» до шага §3.3.
 
-## 3. Установка интеграции
+## 3. Интеграция и привязка станции
 
-Интеграция не входит в образ аддона: её нужно положить в `/config/custom_components/` и
-перезапустить HA. Есть два пути.
+Интеграция ставится отдельно от аддона (папка `custom_components/pulsar_brain` в `/config`), но
+настраивается автоматически: аддон передаёт Home Assistant свой hostname, порт и токен, а станцию
+выбирают в админке аддона. Вводить адреса и токены в HA не нужно.
 
-### 3.1. Вариант A: HACS / zip-релиз
+### 3.1. Установка файлов интеграции
 
-HACS и встроенный Marketplace принимают репозитории **только с публичного GitHub**. Если репозиторий
-опубликован, добавь его в HACS: ⋮ → **Custom repositories** → URL → category **Integration**.
-Файлы `hacs.json`, `manifest.json` и `brand/` уже в репозитории.
-
-Без HACS используй zip из раздела Releases — он содержит `custom_components/pulsar_brain`:
-
-```sh
-cd /config
-wget -O /tmp/pulsar_brain.zip <URL релиза>/pulsar_brain.zip
-unzip -o /tmp/pulsar_brain.zip -d /config
-```
-
-### 3.2. Вариант B: копирование файлов
-
-С рабочей машины (Samba или SSH):
-
-```sh
-ssh root@homeassistant 'mkdir -p /config/custom_components'
-scp -r custom_components/pulsar_brain root@homeassistant:/config/custom_components/
-```
-
-Ожидаемо на HAOS:
-
-```
-/config/custom_components/pulsar_brain/manifest.json
-/config/custom_components/pulsar_brain/__init__.py
-/config/custom_components/pulsar_brain/config_flow.py
-...
-```
-
-Проверка через SSH-аддон:
-
-```sh
-ls /config/custom_components/pulsar_brain
-```
-
-### 3.3. Перезапуск HA
-
-**Настройки → Система → Перезапустить** или:
-
-```sh
-ha core restart
-```
-
-Ожидаемо: после перезапуска в списке интеграций появляется **Pulsar Brain**.
-
-### 3.4. Добавление интеграции
-
-**Настройки → Устройства и службы → Добавить интеграцию → Pulsar Brain.**
-
-Заполни:
-
-- **Hostname аддона.** Для локального аддона — `local-pulsar-brain`; для аддона из репозитория —
-  `<id-репозитория>-pulsar-brain`. Supervisor заменяет `_` на `-` в slug. Точное значение:
+- **HACS / Marketplace:** HACS → ⋮ → **Custom repositories** →
+  `https://github.com/Thedamem/pulsar-brain` → category **Integration** → установить.
+- **Вручную из релиза:**
 
   ```sh
-  ha --raw-json apps info pulsar_brain | grep -o '"hostname": *"[^"]*"'
-  # в старых версиях CLI: ha --raw-json addons info pulsar_brain | ...
+  cd /config
+  wget -O /tmp/pulsar_brain.zip \
+    https://github.com/Thedamem/pulsar-brain/releases/download/v0.2.0/pulsar_brain.zip
+  unzip -o /tmp/pulsar_brain.zip -d /config
   ```
 
-- **Порт** — `8097`.
-- **Bridge token** — из UI аддона (§2.4).
-- **ESPHome-устройство** — колонка pulsar или mock-сателлит из списка.
+- **С рабочей машины** (Samba или SSH):
 
-Ожидаемо: config entry создан, появились сущности:
+  ```sh
+  ssh root@homeassistant 'mkdir -p /config/custom_components'
+  scp -r custom_components/pulsar_brain root@homeassistant:/config/custom_components/
+  ```
+
+### 3.2. Автонастройка
+
+**Настройки → Система → Перезапустить** (или `ha core restart`). После перезапуска HA покажет
+обнаруженную интеграцию **Pulsar Brain** — нажми **Настроить**. Полей нет: hostname, порт и bridge
+token пришли от аддона через Supervisor discovery.
+
+Если автообнаружение не сработало (интеграцию поставили позже аддона и сообщение о discovery
+потерялось), перезапусти HA ещё раз или добавь интеграцию вручную:
+**Настройки → Устройства и службы → Добавить интеграцию → Pulsar Brain** → hostname аддона
+(`ha --raw-json apps info pulsar_brain | grep -o '"hostname": *"[^"]*"'`), порт `8097`, bridge token
+из UI аддона. Станция всё равно выбирается в аддоне.
+
+Ожидаемо: config entry создан, сущности появились, `binary_sensor.connection` = `off` до привязки
+станции.
+
+### 3.3. Привязка станции (в аддоне)
+
+1. UI аддона → **Станция**. Список **Устройства ESPHome из Home Assistant** приходит от интеграции
+   (имя, host:port, MAC).
+2. Выбери колонку с прошивкой pulsar → **Привязать**. Аддон сохраняет привязку и вызывает HA-сервис
+   `pulsar_brain.set_station`; интеграция берёт host/port/PSK из записи **ESPHome** в HA (PSK не
+   покидает Home Assistant) и подключается к колонке.
+3. Если колонки нет в списке, раскрой **Другой адрес**: имя, host, port (обычно `6053`) и Noise PSK
+   из записи ESPHome → **Привязать вручную**.
+4. Отвязать — кнопка **Отвязать** в том же разделе (мост освободит голосовой слот).
+
+Ожидаемо: `binary_sensor.connection` = `on`, `sensor.station` показывает имя колонки, в UI аддона
+**Обзор → Мост** — «Подключён».
+
+### 3.4. Сущности и сервисы
 
 | Сущность | Что показывает |
 |---|---|
 | `binary_sensor.connection` | связь моста с аддоном |
+| `sensor.station` | привязанная колонка (нет — «не привязана») |
 | `sensor.last_transcript` | последняя распознанная фраза |
 | `sensor.last_response` | последний ответ ассистента |
 | `select.provider` | выбранный провайдер |
 | `switch.enabled` | подписка моста на voice assistant |
 | `button.restart_bridge` | перезапуск моста |
 
-Сервисы: `pulsar_brain.ask` (текстовая команда) и `pulsar_brain.announce` (озвучка текста).
+Сервисы: `pulsar_brain.ask` (текстовая команда), `pulsar_brain.announce` (озвучка текста),
+`pulsar_brain.set_station` (вызывается аддоном; можно использовать в автоматизациях).
 
 ### 3.5. Проверка
 
-1. `binary_sensor.connection` = `on`.
+1. `binary_sensor.connection` = `on`, `sensor.station` — имя колонки.
 2. В UI аддона **Обзор** — зелёные Whisper, Piper, HA, провайдер `mock`.
 3. Скажи «Алиса, включи свет». Ожидаемо: колонка отвечает голосом, `light.kitchen` (или твой свет)
    включается, в **Истории** появляется run.
@@ -226,8 +212,9 @@ ha core restart
 
 - **Провайдеры.** UI → **Провайдеры** → выбрать, заполнить, **Проверить**, **Сохранить**. Без
   ключей оставь `mock`: ответы детерминированные, инструменты работают.
-- **STT/TTS.** UI → **Ассистент**: хост/порт Whisper и Piper, язык, голос, режим озвучки. Для
-  аддонов HAOS обычно `core-whisper:10300` и `core-piper:10200`.
+- **Станция.** UI → **Станция**: список берётся из интеграции ESPHome; привязка и отвязка — там же.
+- **STT/TTS.** UI → **Ассистент**: хост/порт Whisper и Piper, язык, голос, режим озвучки. В HAOS
+  это аддоны `core-whisper:10300` и `core-piper:10200`.
 - **MCP.** UI → **MCP** → добавить сервер (HTTP/SSE/stdio), **Проверить**, сохранить. Для stdio
   бинарник должен быть внутри образа аддона.
 - **Планировщик.** Разовые таймеры и отложенные действия — в SQLite; повторяющиеся — нативные

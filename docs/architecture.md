@@ -405,3 +405,16 @@ Supervisor'а, Noise/PSK реальной колонки (мок — plaintext),
 - [docs/research-openclaw.md](research-openclaw.md) — детали OpenClaw для `addon/src/llm/openclaw.ts`.
 - [pulsar](https://github.com/Morvex885/pulsar) — прошивка; поведение VA в
   `satellite/crates/pulsar/src/controller/voice.rs` и `docs/voice.md`.
+
+## Привязка станции и автонастройка (0.2)
+
+Аддон при старте вызывает Supervisor API (`/addons/self/info` → hostname, затем `/discovery`) и
+публикует `{host, port, bridge_token}` для интеграции `pulsar_brain`. Интеграция реализует
+`async_step_hassio` и создаёт config entry без пользовательского ввода.
+
+Интеграция — источник списка ESPHome-устройств: каждые 60 секунд она отправляет
+`POST /api/stations` в аддон (`{stations, current}`), где `current` — текущая привязка без PSK.
+Пользователь выбирает станцию в аддоне; аддон сохраняет привязку (PSK шифруется AES-GCM) и
+вызывает HA-сервис `pulsar_brain.set_station`. Интеграция резолвит `entry_id` в записи ESPHome,
+берёт host/port/PSK оттуда и перезагружает запись — мост подключается к колонке. Если записи
+ESPHome нет, используется ручной host/port/PSK, введённый в аддоне.

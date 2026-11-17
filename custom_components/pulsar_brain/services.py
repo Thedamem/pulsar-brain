@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import voluptuous as vol
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
@@ -13,22 +15,54 @@ from homeassistant.helpers import config_validation as cv
 
 from .bridge import AddonError
 from .const import (
+    ATTR_CLEAR,
+    ATTR_CONFIG_ENTRY_ID,
+    ATTR_ENTRY_ID,
+    ATTR_HOST,
+    ATTR_NAME,
+    ATTR_PORT,
     ATTR_RESPONSE,
     ATTR_SPEECH,
     ATTR_TOOL_TRACES,
+    CONF_NOISE_PSK,
+    CONF_STATION,
+    DEFAULT_DEVICE_PORT,
     DOMAIN,
+    ESPHOME_DOMAIN,
     SERVICE_ANNOUNCE,
     SERVICE_ASK,
+    SERVICE_SET_STATION,
+)
+from .stations import (
+    StationError,
+    describe_station,
+    station_options_cleared,
+    station_options_updated,
 )
 
 if TYPE_CHECKING:
     from . import BridgeRuntime
+
+_LOGGER = logging.getLogger(__name__)
 
 _ASK_SCHEMA = vol.Schema({vol.Required("text"): str})
 _ANNOUNCE_SCHEMA = vol.Schema(
     {
         vol.Required("text"): str,
         vol.Optional(ATTR_ENTITY_ID): cv.entity_id,
+    }
+)
+_SET_STATION_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): str,
+        vol.Optional(ATTR_ENTRY_ID): str,
+        vol.Optional(ATTR_NAME): str,
+        vol.Optional(ATTR_HOST): str,
+        vol.Optional(ATTR_PORT, default=DEFAULT_DEVICE_PORT): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=65535)
+        ),
+        vol.Optional(CONF_NOISE_PSK): str,
+        vol.Optional(ATTR_CLEAR, default=False): bool,
     }
 )
 _ASSIST_SATELLITE_DOMAIN = "assist_satellite"
@@ -101,6 +135,35 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         finally:
             await runtime.async_claim_voice_slot()
 
+    async def _async_handle_set_station(call: ServiceCall) -> None:
+        entry = _integration_entry(hass, call.data.get(ATTR_CONFIG_ENTRY_ID))
+        if bool(call.data.get(ATTR_CLEAR, False)):
+            options = station_options_cleared(entry.options)
+            _LOGGER.info("Station unbound from config entry %s", entry.entry_id)
+        else:
+            esphome_entries = {
+                esphome_entry.entry_id: esphome_entry
+                for esphome_entry in hass.config_entries.async_entries(ESPHOME_DOMAIN)
+            }
+            try:
+                options = station_options_updated(
+                    entry.options, call.data, esphome_entries
+                )
+            except StationError as err:
+                raise ServiceValidationError(
+                    err.message,
+                    translation_domain=DOMAIN,
+                    translation_key=err.code,
+                ) from err
+            station = options[CONF_STATION]
+            _LOGGER.info(
+                "Station bound to config entry %s: %s",
+                entry.entry_id,
+                describe_station(station),
+            )
+        hass.config_entries.async_update_entry(entry, options=options)
+        await hass.config_entries.async_reload(entry.entry_id)
+
     hass.services.async_register(
         DOMAIN,
         SERVICE_ASK,
@@ -114,6 +177,39 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         _async_handle_announce,
         schema=_ANNOUNCE_SCHEMA,
     )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_STATION,
+        _async_handle_set_station,
+        schema=_SET_STATION_SCHEMA,
+    )
+
+
+def _integration_entry(hass: HomeAssistant, config_entry_id: object) -> ConfigEntry:
+    if isinstance(config_entry_id, str) and config_entry_id:
+        entry = hass.config_entries.async_get_entry(config_entry_id)
+        if entry is None or entry.domain != DOMAIN:
+            raise ServiceValidationError(
+                f"Запись Pulsar Brain {config_entry_id} не найдена",
+                translation_domain=DOMAIN,
+                translation_key="config_entry_not_found",
+                translation_placeholders={"entry_id": config_entry_id},
+            )
+        return entry
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        raise ServiceValidationError(
+            "Интеграция Pulsar Brain не настроена",
+            translation_domain=DOMAIN,
+            translation_key="integration_not_configured",
+        )
+    if len(entries) > 1:
+        _LOGGER.debug(
+            "Several Pulsar Brain entries; set_station uses %s "
+            "(pass config_entry_id to choose)",
+            entries[0].entry_id,
+        )
+    return entries[0]
 
 
 def _announce_target(hass: HomeAssistant, entity_id: str | None) -> str:
@@ -144,6 +240,6 @@ def _announce_target(hass: HomeAssistant, entity_id: str | None) -> str:
 
 async def async_unregister_services(hass: HomeAssistant) -> None:
     """Remove the services when the last entry is unloaded."""
-    for service in (SERVICE_ASK, SERVICE_ANNOUNCE):
+    for service in (SERVICE_ASK, SERVICE_ANNOUNCE, SERVICE_SET_STATION):
         if hass.services.has_service(DOMAIN, service):
             hass.services.async_remove(DOMAIN, service)

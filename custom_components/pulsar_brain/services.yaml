@@ -28,3 +28,54 @@ announce:
         entity:
           filter:
             domain: assist_satellite
+set_station:
+  name: Привязать станцию
+  description: Сохранить выбранную станцию ESPHome и перезагрузить мост. Вызывается аддоном.
+  fields:
+    config_entry_id:
+      name: Запись интеграции
+      description: ID записи Pulsar Brain; по умолчанию используется единственная.
+      required: false
+      selector:
+        text:
+    entry_id:
+      name: Запись ESPHome
+      description: ID записи интеграции ESPHome; host, port и PSK берутся из неё.
+      required: false
+      selector:
+        text:
+    name:
+      name: Имя станции
+      description: Нужно для ручной привязки.
+      required: false
+      selector:
+        text:
+    host:
+      name: Хост станции
+      description: Нужен для ручной привязки.
+      required: false
+      selector:
+        text:
+    port:
+      name: Порт ESPHome API
+      description: По умолчанию 6053.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 65535
+          mode: box
+    noise_psk:
+      name: Noise PSK
+      description: Только для ручной привязки; для записи ESPHome берётся из неё.
+      required: false
+      selector:
+        text:
+          type: password
+    clear:
+      name: Отвязать
+      description: Убрать привязку станции и остановить мост.
+      required: false
+      selector:
+        boolean:
+

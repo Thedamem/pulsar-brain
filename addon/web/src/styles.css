@@ -1302,6 +1302,51 @@ a {
   gap: 4px;
 }
 
+/* ───────────────────────────────────────────────────────────── station ── */
+
+.station-endpoint,
+.station-mac {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.station-freshness {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  max-width: 80ch;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.station-manual {
+  max-width: 720px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.station-manual > summary {
+  padding: 12px 0;
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.station-manual > summary:hover {
+  color: var(--accent-strong);
+}
+
+.station-manual[open] > summary {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.station-address-row {
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 160px);
+}
+
 /* ───────────────────────────────────────────────────────── responsive ── */
 
 @media (max-width: 1000px) {
@@ -1416,6 +1461,10 @@ a {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
     max-width: none;
+  }
+
+  .station-address-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dl {

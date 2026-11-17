@@ -115,8 +115,9 @@ scripts/install-local.sh                  # образ, контейнер ад�
 
 ## Установка на Home Assistant OS
 
-Две части ставятся отдельно: **аддон** — из магазина аддонов, **интеграция** — вручную или через
-HACS. Подробный разбор с ожидаемыми результатами и ошибками — [docs/install.md](docs/install.md).
+Ставятся две части, но вручную вводить адреса и токены не нужно: аддон сам объявляет себя
+Home Assistant через Supervisor discovery, а колонка выбирается в админке аддона. Подробный разбор
+с ожидаемыми результатами и ошибками — [docs/install.md](docs/install.md).
 
 ### 1. Аддон
 
@@ -125,46 +126,46 @@ HACS. Подробный разбор с ожидаемыми результат
    git-сервер с этим репозиторием, доступный Supervisor'у).
 3. Установи **Pulsar Brain** → **Запустить**. Supervisor соберёт образ из `addon/Dockerfile` на
    устройстве (первая сборка занимает несколько минут и требует сеть для `npm ci`).
-4. На странице аддона открой **Open Web UI** (доступ только через ingress) → **Настройки** →
-   скопируй **bridge token**.
 
 Локальный вариант без репозитория: скопируй каталог `addon/` в `/addons/pulsar_brain` и нажми
 ⋮ → **Reload** в магазине ([docs/install.md](docs/install.md), §2.3).
 
 ### 2. Интеграция
 
-HACS и встроенный в Home Assistant Marketplace читают репозитории **только с публичного GitHub** —
-это ограничение их кода. Поэтому:
+HACS и встроенный Marketplace читают репозитории **только с публичного GitHub**. Установи
+интеграцию любым способом:
 
-- **HACS / Marketplace** (после публикации репозитория на GitHub): HACS → ⋮ →
-  **Custom repositories** → URL репозитория → category **Integration** → установить **Pulsar
-  Brain**. `hacs.json`, `manifest.json` и brand-ассеты уже лежат в репозитории.
-- **Вручную** (работает всегда): скачай `pulsar_brain.zip` из раздела **Releases** и распакуй в
-  `/config/custom_components`, затем перезапусти HA:
+- **HACS / Marketplace:** HACS → ⋮ → **Custom repositories** → `https://github.com/Thedamem/pulsar-brain`
+  → category **Integration** → установить **Pulsar Brain**.
+- **Вручную из релиза:**
 
   ```sh
   cd /config
-  wget -O /tmp/pulsar_brain.zip     https://github.com/Thedamem/pulsar-brain/releases/download/v0.1.0/pulsar_brain.zip
+  wget -O /tmp/pulsar_brain.zip \
+    https://github.com/Thedamem/pulsar-brain/releases/download/v0.2.0/pulsar_brain.zip
   unzip -o /tmp/pulsar_brain.zip -d /config
   ha core restart
   ```
 
-  Через Samba можно просто скопировать папку `custom_components/pulsar_brain` в
-  `/config/custom_components/`.
+После перезапуска HA покажет **обнаруженную интеграцию Pulsar Brain**. Нажми **Настроить** —
+полей нет, всё уже передано аддоном. Если автообнаружение не сработало (аддон был установлен
+позже интеграции), перезапусти HA или добавь интеграцию вручную: hostname и bridge token показаны
+в аддоне в **Настройках**.
 
-### 3. Подключение
+### 3. Привязка колонки
 
-**Настройки → Устройства и службы → Добавить интеграцию → Pulsar Brain**: hostname аддона, порт
-`8097`, bridge token и ESPHome-устройство (колонка или mock-сателлит). Hostname аддона:
+1. Открой панель аддона: **Настройки → Аддоны → Pulsar Brain → Open Web UI**.
+2. Раздел **Станция** → выбери колонку в списке **Устройства ESPHome из Home Assistant** →
+   **Привязать**. Список присылает интеграция; аддон передаёт выбор обратно в HA.
+3. Если колонки нет в списке (не добавлена в HA как ESPHome-устройство), раскрой **Другой адрес**
+   и укажи host/port и Noise PSK вручную (PSK виден в записи интеграции ESPHome).
 
-```sh
-ha --raw-json apps info pulsar_brain | grep -o '"hostname": *"[^"]*"'
-```
+![Раздел «Станция» в админке аддона](docs/screenshots/station.png)
 
-У локального аддона обычно `local-pulsar-brain`, у аддона из репозитория —
-`<id-репозитория>-pulsar-brain`. После добавления появятся `binary_sensor.connection`,
+После привязки появятся `binary_sensor.connection`, `sensor.station`,
 `sensor.last_transcript/last_response`, `select.provider`, `switch.enabled`,
-`button.restart_bridge` и сервисы `pulsar_brain.ask` / `pulsar_brain.announce`.
+`button.restart_bridge` и сервисы `pulsar_brain.ask` / `pulsar_brain.announce`. Скажи
+«Алиса, включи свет» — колонка ответит и выполнит действие.
 
 ## Настройка
 
@@ -263,7 +264,7 @@ scripts/check-all.sh           # tsc, vitest, сборка SPA, py_compile, pyte
 
 ## Лицензия и статус
 
-- Версия **0.1.0**, gate перед релизом — `scripts/check-all.sh`.
+- Версия **0.2.0**, gate перед релизом — `scripts/check-all.sh`.
 - **Лицензия не выбрана** — файл `LICENSE` пока отсутствует, образ помечен
   `LicenseRef-Proprietary`. Добавление лицензии — отдельное решение maintainer'а.
 - Провайдеры, кроме `mock`, не проверены живыми ключами; это явно отмечено в отчётах и UI.

@@ -282,3 +282,64 @@ custom_components/pulsar_brain/
 - Мост не вызывает HA-сервисы и не ходит в LLM.
 - Аддон не подключается к ESPHome напрямую.
 - Никаких внешних CDN в UI.
+
+## 8. Автонастройка и привязка станции (v0.2)
+
+Цель: пользователь не вводит в интеграции ни host/port аддона, ни bridge token, ни IP/PSK станции.
+Всё это делает аддон: он объявляет себя Supervisor'у и передаёт выбранную станцию интеграции.
+
+### 8.1. Supervisor discovery аддона
+
+- В `addon/config.yaml` объявлено `discovery: ["pulsar_brain"]`.
+- При старте аддон (если задан `SUPERVISOR_TOKEN`):
+  1. `GET http://supervisor/addons/self/info` → `hostname` (имя контейнера в сети hassio);
+  2. `POST http://supervisor/discovery` с телом
+     `{"service":"pulsar_brain","config":{"host":"<hostname>","port":8097,"bridge_token":"<token>","version":"0.2.0"}}`.
+- Supervisor передаёт discovery в HA; интеграция реализует `async_step_hassio(discovery_info)` и
+  **автоматически создаёт config entry** без полей (`unique_id = discovery_info.uuid`,
+  data: addon_host/addon_port/bridge_token/addon_slug). Повторный discovery не плодит записи.
+- В dev-режиме без Supervisor discovery пропускается, интеграция настраивается вручную.
+
+### 8.2. Список станций: интеграция → аддон
+
+Интеграция при старте, затем раз в 60 с, а также при изменениях записей ESPHome отправляет
+`POST http://<addon>/api/stations` с заголовком `Authorization: Bearer <bridge_token>`:
+
+```json
+{
+  "stations": [
+    {"entry_id":"01...","name":"yandex-lite2-000001","host":"192.0.2.61","port":6053,"mac":"02:00:00:00:00:01"}
+  ],
+  "current": {"mode":"discovered","entry_id":"01...","name":"yandex-lite2-000001",
+              "host":"192.0.2.61","port":6053,"has_psk":true}
+}
+```
+
+`current` необязателен: если он передан, аддон принимает привязку со стороны HA (это нужно после
+обновления 0.1.x → 0.2.0 и после любого `set_station`); PSK в нём — только флаг `has_psk`.
+
+PSK в списке не передаётся. Аддон хранит последний список в памяти и в `/data/station.json`
+(без секретов), UI показывает «Станция».
+
+### 8.3. Привязка станции: аддон → интеграция
+
+- UI аддона: `POST /api/station` с `{entry_id?}` (из списка) либо `{name,host,port,noise_psk?}` для
+  ручного режима; `DELETE /api/station` — отвязать.
+- Аддон сохраняет привязку (`noise_psk` шифруется AES-GCM) и вызывает HA-сервис
+  `pulsar_brain.set_station` (через `homeassistant_api`) с теми же полями.
+- Интеграция: если передан `entry_id`, берёт host/port/noise_psk/device_name из config entry
+  интеграции `esphome` (PSK не покидает HA); иначе использует явные host/host/psk. Сохраняет в
+  `entry.options["station"]` и перезагружает запись, после чего мост подключается к устройству.
+- `clear=true` — отвязать, остановить ESPHome-клиент и освободить VA-слот.
+
+### 8.4. HTTP-контракт аддона
+
+| Метод | Путь | Auth | Назначение |
+|---|---|---|---|
+| `GET` | `/api/stations` | UI/Bearer | список станций, текущая привязка, свежесть связи с интеграцией |
+| `POST` | `/api/stations` | bridge token | интеграция присылает список ESPHome-устройств |
+| `POST` | `/api/station` | UI/Bearer | привязать станцию (из списка или вручную) |
+| `DELETE` | `/api/station` | UI/Bearer | отвязать |
+
+DTO — `StationEntryDto`, `StationBindingDto`, `StationsResponse`, `SetStationRequest` в
+`addon/src/shared/protocol.ts`.

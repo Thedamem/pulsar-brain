@@ -9,16 +9,22 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 import sys
 import types
 
+import aiohttp
 import pytest
+
+from helpers import MockAddonServer
 
 COMPONENT_DIR = (
     Path(__file__).resolve().parents[2] / "custom_components" / "pulsar_brain"
 )
 PURE_MODULES = (
     "const",
+    "discovery",
+    "stations",
     "events",
     "wav",
     "protocol",
@@ -57,6 +63,8 @@ def load_component_module(name: str) -> types.ModuleType:
 
 class _Component:
     const: types.ModuleType
+    discovery: types.ModuleType
+    stations: types.ModuleType
     events: types.ModuleType
     wav: types.ModuleType
     protocol: types.ModuleType
@@ -72,3 +80,34 @@ def component() -> _Component:
     for name in PURE_MODULES:
         setattr(loaded, name, load_component_module(name))
     return loaded
+
+
+@pytest.fixture
+async def server():
+    """In-process mock addon with the bridge HTTP API."""
+    mock = MockAddonServer()
+    await mock.start()
+    yield mock
+    await mock.stop()
+
+
+@pytest.fixture
+async def session():
+    """HTTP session for tests that exercise the addon client."""
+    timeout = aiohttp.ClientTimeout(total=5, connect=1, sock_read=2)
+    async with aiohttp.ClientSession(timeout=timeout) as client:
+        yield client
+
+
+@pytest.fixture(scope="session")
+def ha_component(component: _Component) -> SimpleNamespace:
+    """Config flow and services loaded against the Home Assistant shim."""
+    from ha_shim import install
+
+    shim = install()
+    return SimpleNamespace(
+        config_flow=load_component_module("config_flow"),
+        services=load_component_module("services"),
+        shim=shim,
+        bridge=component.bridge,
+    )
